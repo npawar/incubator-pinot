@@ -52,6 +52,7 @@ import org.apache.helix.PropertyKey;
 import org.apache.helix.PropertyKey.Builder;
 import org.apache.helix.PropertyPathBuilder;
 import org.apache.helix.ZNRecord;
+import org.apache.helix.examples.MasterSlaveStateModelFactory;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.manager.zk.ZkCacheBaseDataAccessor;
 import org.apache.helix.model.CurrentState;
@@ -59,6 +60,7 @@ import org.apache.helix.model.ExternalView;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
 import org.apache.helix.model.LiveInstance;
+import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.pinot.common.config.IndexingConfig;
 import org.apache.pinot.common.config.OfflineTagConfig;
@@ -125,6 +127,7 @@ public class PinotHelixResourceManager {
   private final String _helixZkURL;
   private final String _helixClusterName;
   private final String _instanceId;
+  private final String _controllerParticipantInstanceId;
   private final String _dataDir;
   private final long _externalViewOnlineToOfflineTimeoutMillis;
   private final boolean _isSingleTenantCluster;
@@ -145,6 +148,7 @@ public class PinotHelixResourceManager {
     _helixZkURL = HelixConfig.getAbsoluteZkPathForHelix(zkURL);
     _helixClusterName = helixClusterName;
     _instanceId = controllerInstanceId;
+    _controllerParticipantInstanceId = CommonConstants.Helix.PREFIX_OF_CONTROLLER_INSTANCE + _instanceId;
     _dataDir = dataDir;
     _externalViewOnlineToOfflineTimeoutMillis = externalViewOnlineToOfflineTimeoutMillis;
     _isSingleTenantCluster = isSingleTenantCluster;
@@ -179,6 +183,10 @@ public class PinotHelixResourceManager {
     _cacheInstanceConfigsDataAccessor =
         new ZkCacheBaseDataAccessor<>((ZkBaseDataAccessor<ZNRecord>) baseDataAccessor, instanceConfigs, null,
             Collections.singletonList(instanceConfigs));
+
+    // Add instance group tag for controller
+    addInstanceGroupTag();
+
     _keyBuilder = _helixDataAccessor.keyBuilder();
     _segmentDeletionManager = new SegmentDeletionManager(_dataDir, _helixAdmin, _helixClusterName, _propertyStore);
     ZKMetadataProvider.setClusterTenantIsolationEnabled(_propertyStore, _isSingleTenantCluster);
@@ -254,17 +262,31 @@ public class PinotHelixResourceManager {
    */
   private HelixManager registerAndConnectAsHelixParticipant() {
     HelixManager helixManager = HelixManagerFactory
-        .getZKHelixManager(_helixClusterName, CommonConstants.Helix.PREFIX_OF_CONTROLLER_INSTANCE + _instanceId,
-            InstanceType.PARTICIPANT, _helixZkURL);
+        .getZKHelixManager(_helixClusterName, _controllerParticipantInstanceId, InstanceType.PARTICIPANT, _helixZkURL);
+
+    StateMachineEngine stateMach = helixManager.getStateMachineEngine();
+    MasterSlaveStateModelFactory factory = new MasterSlaveStateModelFactory();
+    stateMach.registerStateModelFactory(CommonConstants.Helix.MASTER_SLAVE_STATE_MODEL_DEFINITION, factory);
     try {
       helixManager.connect();
       return helixManager;
     } catch (Exception e) {
-      String errorMsg =
-          String.format("Exception when connecting the instance %s as Participant to Helix.", _instanceId);
+      String errorMsg = String.format("Exception when connecting the instance %s as Participant to Helix.",
+          _controllerParticipantInstanceId);
       LOGGER.error(errorMsg, e);
       throw new RuntimeException(errorMsg);
     }
+  }
+
+  /**
+   * Add instance group tag for controller so that pinot controller can be assigned to lead controller resource.
+   */
+  private void addInstanceGroupTag() {
+    _helixZkManager.getClusterManagmentTool().enableInstance(_helixClusterName, _controllerParticipantInstanceId, true);
+    InstanceConfig instanceConfig = getHelixInstanceConfig(_controllerParticipantInstanceId);
+    instanceConfig.addTag(CommonConstants.Helix.CONTROLLER_INSTANCE_TYPE);
+    HelixDataAccessor accessor = _helixZkManager.getHelixDataAccessor();
+    accessor.setProperty(accessor.keyBuilder().instanceConfig(_controllerParticipantInstanceId), instanceConfig);
   }
 
   /**
@@ -2270,6 +2292,16 @@ public class PinotHelixResourceManager {
       endpointToInstance.put(instance, hostnameSplit[1] + ":" + adminPort);
     }
     return endpointToInstance;
+  }
+
+  public IdealState getLeadControllerResourceIdealState() {
+    return _helixAdmin
+        .getResourceIdealState(getHelixClusterName(), CommonConstants.Helix.LEAD_CONTROLLER_RESOURCE_INSTANCE);
+  }
+
+  public ExternalView getLeadControllerResourceExternalView() {
+    return _helixAdmin
+        .getResourceExternalView(getHelixClusterName(), CommonConstants.Helix.LEAD_CONTROLLER_RESOURCE_INSTANCE);
   }
 
   /*

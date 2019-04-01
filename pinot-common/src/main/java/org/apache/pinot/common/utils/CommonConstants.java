@@ -35,8 +35,13 @@ public class CommonConstants {
 
     public static final String SERVER_INSTANCE_TYPE = "server";
     public static final String BROKER_INSTANCE_TYPE = "broker";
+    public static final String CONTROLLER_INSTANCE_TYPE = "controller";
 
     public static final String BROKER_RESOURCE_INSTANCE = "brokerResource";
+    public static final String LEAD_CONTROLLER_RESOURCE_INSTANCE = "leadControllerResource";
+    public static final int DEFAULT_NUMBER_OF_PARTICIPANTS_IN_LEAD_CONTROLLER_RESOURCE = 20;
+
+    public static final String MASTER_SLAVE_STATE_MODEL_DEFINITION = "MasterSlave";
 
     public static final String UNTAGGED_SERVER_INSTANCE = "server_untagged";
     public static final String UNTAGGED_BROKER_INSTANCE = "broker_untagged";

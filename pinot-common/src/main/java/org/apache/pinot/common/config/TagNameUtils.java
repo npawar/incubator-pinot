@@ -18,6 +18,7 @@
  */
 package org.apache.pinot.common.config;
 
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.ServerType;
 import org.apache.pinot.common.utils.TenantRole;
 
@@ -53,6 +54,11 @@ public class TagNameUtils {
     }
     if (tagName.endsWith(TenantRole.BROKER.toString())) {
       return TenantRole.BROKER;
+    }
+    // Helix uses this tag to support full-auto.
+    // Return null if the tag is controller, which isn't a type of tenant in Pinot.
+    if (tagName.equalsIgnoreCase(CommonConstants.Helix.CONTROLLER_INSTANCE_TYPE)) {
+      return null;
     }
     throw new RuntimeException("Cannot identify tenant type from tag name : " + tagName);
   }

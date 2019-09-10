@@ -222,19 +222,25 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
         (queryOptions == null) ? "false" : queryOptions.getOrDefault(QueryOptionKey.PRESERVE_TYPE, "false");
     boolean preserveType = Boolean.valueOf(preserveTypeString);
 
-    // Reduce server responses data and set query results into the broker response.
-    if (brokerRequest.isSetSelections()) {
-      // Selection query.
-
-      if (dataTableMap.isEmpty()) {
-        if (cachedDataSchema != null) {
-          List<String> selectionColumns = SelectionOperatorUtils.getSelectionColumns(brokerRequest.getSelections().getSelectionColumns(),
-              cachedDataSchema);
+    if (dataTableMap.isEmpty()) {
+      if (cachedDataSchema != null) {
+        if (brokerRequest.isSetSelections()) {
+          List<String> selectionColumns =
+              SelectionOperatorUtils.getSelectionColumns(brokerRequest.getSelections().getSelectionColumns(),
+                  cachedDataSchema);
           brokerResponseNative.setSelectionResults(new SelectionResults(selectionColumns, new ArrayList<>(0)));
+        } else if (brokerRequest.isSetOrderBy() && queryOptions != null && SQL.equals(
+            queryOptions.get(QueryOptionKey.GROUP_BY_MODE)) && SQL.equals(queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
+          setSQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
+              brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
         }
-      } else {
+      }
+    } else {
+      // Reduce server responses data and set query results into the broker response.
+      assert cachedDataSchema != null;
 
-        assert cachedDataSchema != null;
+      if (brokerRequest.isSetSelections()) {
+        // Selection query.
 
         // For data table map with more than one data tables, remove conflicting data tables.
         DataSchema masterDataSchema = cachedDataSchema.clone();
@@ -254,52 +260,51 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
         }
         setSelectionResults(brokerResponseNative, brokerRequest.getSelections(), dataTableMap, masterDataSchema,
             preserveType);
-      }
-    } else {
-      // Aggregation query.
+      } else {
+        // Aggregation query.
+        AggregationFunction[] aggregationFunctions =
+            AggregationFunctionUtils.getAggregationFunctions(brokerRequest.getAggregationsInfo());
 
-      assert cachedDataSchema != null;
+        if (!brokerRequest.isSetGroupBy()) {
+          // Aggregation only query.
+          setAggregationResults(brokerResponseNative, aggregationFunctions, dataTableMap, cachedDataSchema,
+              preserveType);
+        } else { // Aggregation group-by query.
 
-      AggregationFunction[] aggregationFunctions =
-          AggregationFunctionUtils.getAggregationFunctions(brokerRequest.getAggregationsInfo());
-      if (!brokerRequest.isSetGroupBy()) {
-        // Aggregation only query.
-        setAggregationResults(brokerResponseNative, aggregationFunctions, dataTableMap, cachedDataSchema, preserveType);
-      } else { // Aggregation group-by query.
+          // process group by ORDER BY results only if GROUP_BY_MODE is explicitly set to SQL
+          if (brokerRequest.isSetOrderBy() && queryOptions != null && SQL.equals(
+              queryOptions.get(QueryOptionKey.GROUP_BY_MODE))) {
+            // sql + order by
 
-        // process group by ORDER BY results only if GROUP_BY_MODE is explicitly set to SQL
-        if (brokerRequest.isSetOrderBy() && queryOptions != null && SQL.equals(
-            queryOptions.get(QueryOptionKey.GROUP_BY_MODE))) {
-          // sql + order by
-
-          int resultSize = 0;
-          // if RESPONSE_FORMAT is SQL, return results in {@link ResultTable}
-          if (SQL.equals(queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
-            setSQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
-                brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
-            resultSize = brokerResponseNative.getResultTable().getRows().size();
-          } else {
-            setPQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
-                brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
-            if (!brokerResponseNative.getAggregationResults().isEmpty()) {
-              resultSize = brokerResponseNative.getAggregationResults().get(0).getGroupByResult().size();
+            int resultSize = 0;
+            // if RESPONSE_FORMAT is SQL, return results in {@link ResultTable}
+            if (SQL.equals(queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
+              setSQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
+                  brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
+              resultSize = brokerResponseNative.getResultTable().getRows().size();
+            } else {
+              setPQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
+                  brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
+              if (!brokerResponseNative.getAggregationResults().isEmpty()) {
+                resultSize = brokerResponseNative.getAggregationResults().get(0).getGroupByResult().size();
+              }
             }
-          }
-          if (brokerMetrics != null && resultSize > 0) {
-            brokerMetrics.addMeteredQueryValue(brokerRequest, BrokerMeter.GROUP_BY_SIZE, resultSize);
-          }
-        } else {
+            if (brokerMetrics != null && resultSize > 0) {
+              brokerMetrics.addMeteredQueryValue(brokerRequest, BrokerMeter.GROUP_BY_SIZE, resultSize);
+            }
+          } else {
 
-          boolean[] aggregationFunctionSelectStatus =
-              AggregationFunctionUtils.getAggregationFunctionsSelectStatus(brokerRequest.getAggregationsInfo());
-          setGroupByHavingResults(brokerResponseNative, aggregationFunctions, aggregationFunctionSelectStatus,
-              brokerRequest.getGroupBy(), dataTableMap, brokerRequest.getHavingFilterQuery(),
-              brokerRequest.getHavingFilterSubQueryMap(), preserveType);
-          if (brokerMetrics != null && (!brokerResponseNative.getAggregationResults().isEmpty())) {
-            // We emit the group by size when the result isn't empty. All the sizes among group-by results should be the same.
-            // Thus, we can just emit the one from the 1st result.
-            brokerMetrics.addMeteredQueryValue(brokerRequest, BrokerMeter.GROUP_BY_SIZE,
-                brokerResponseNative.getAggregationResults().get(0).getGroupByResult().size());
+            boolean[] aggregationFunctionSelectStatus =
+                AggregationFunctionUtils.getAggregationFunctionsSelectStatus(brokerRequest.getAggregationsInfo());
+            setGroupByHavingResults(brokerResponseNative, aggregationFunctions, aggregationFunctionSelectStatus,
+                brokerRequest.getGroupBy(), dataTableMap, brokerRequest.getHavingFilterQuery(),
+                brokerRequest.getHavingFilterSubQueryMap(), preserveType);
+            if (brokerMetrics != null && (!brokerResponseNative.getAggregationResults().isEmpty())) {
+              // We emit the group by size when the result isn't empty. All the sizes among group-by results should be the same.
+              // Thus, we can just emit the one from the 1st result.
+              brokerMetrics.addMeteredQueryValue(brokerRequest, BrokerMeter.GROUP_BY_SIZE,
+                  brokerResponseNative.getAggregationResults().get(0).getGroupByResult().size());
+            }
           }
         }
       }
@@ -447,11 +452,6 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
     List<String> columns = new ArrayList<>(dataSchema.size());
     for (int i = 0; i < dataSchema.size(); i++) {
       columns.add(dataSchema.getColumnName(i));
-    }
-
-    if (dataTableMap.isEmpty()) {
-      brokerResponseNative.setResultTable(new ResultTable(columns, new ArrayList<>(0)));
-      return;
     }
 
     int numGroupBy = groupBy.getExpressionsSize();

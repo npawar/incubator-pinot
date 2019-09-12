@@ -28,6 +28,7 @@ import org.apache.pinot.common.request.BrokerRequest;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.core.common.Operator;
 import org.apache.pinot.core.operator.CombineGroupByOperator;
+import org.apache.pinot.core.operator.CombineGroupByOperatorV1;
 import org.apache.pinot.core.operator.CombineGroupByOrderByOperator;
 import org.apache.pinot.core.operator.CombineOperator;
 import org.apache.pinot.core.query.exception.BadQueryRequestException;
@@ -147,11 +148,13 @@ public class CombinePlanNode implements PlanNode {
     if (_brokerRequest.isSetAggregationsInfo() && _brokerRequest.getGroupBy() != null) {
       // Aggregation group-by query
       Map<String, String> queryOptions = _brokerRequest.getQueryOptions();
-      // new Combine operator only when GROUP_BY_MODE explicitly set to SQL
-      if (queryOptions != null && SQL.equalsIgnoreCase(queryOptions.get(QueryOptionKey.GROUP_BY_MODE))) {
-        return new CombineGroupByOrderByOperator(operators, _brokerRequest, _executorService, _timeOutMs,
-            _numGroupsLimit);
+      if (queryOptions != null) {
+        if (V1.equalsIgnoreCase(queryOptions.get(QueryOptionKey.GROUP_BY_MODE))) {
+          return new CombineGroupByOperatorV1(operators, _brokerRequest, _executorService, _timeOutMs, _numGroupsLimit);
+        }
+        // V2, V3 etc for various implementations
       }
+      // default
       return new CombineGroupByOperator(operators, _brokerRequest, _executorService, _timeOutMs, _numGroupsLimit);
     } else {
       // Selection or aggregation only query

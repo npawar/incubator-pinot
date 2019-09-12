@@ -73,6 +73,7 @@ public class ConcurrentIndexedTable extends IndexedTable {
 
     _lookupMap = new ConcurrentHashMap<>();
     _readWriteLock = new ReentrantReadWriteLock();
+
     _isOrderBy = CollectionUtils.isNotEmpty(orderBy);
     if (_isOrderBy) {
       _minHeapComparator = OrderByUtils.getKeysAndValuesComparator(dataSchema, orderBy, aggregationInfos).reversed();
@@ -182,7 +183,6 @@ public class ConcurrentIndexedTable extends IndexedTable {
         }
       } else {
         // drop randomly
-
         int numRecordsToDrop = _lookupMap.size() - trimToSize;
         for (Key evictKey : _lookupMap.keySet()) {
           _lookupMap.remove(evictKey);

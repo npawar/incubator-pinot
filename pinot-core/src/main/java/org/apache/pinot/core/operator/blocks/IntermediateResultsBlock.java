@@ -132,6 +132,14 @@ public class IntermediateResultsBlock implements Block {
     _dataSchema = dataSchema;
   }
 
+  public Table getTable() {
+    return _table;
+  }
+
+  public void setTable(Table table) {
+    _table = table;
+  }
+
   @Nullable
   public Collection<Serializable[]> getSelectionResult() {
     return _selectionResult;

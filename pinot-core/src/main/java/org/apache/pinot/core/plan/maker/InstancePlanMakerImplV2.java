@@ -22,13 +22,16 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import org.apache.pinot.common.request.AggregationInfo;
 import org.apache.pinot.common.request.BrokerRequest;
 import org.apache.pinot.common.request.transform.TransformExpressionTree;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.core.data.manager.SegmentDataManager;
 import org.apache.pinot.core.indexsegment.IndexSegment;
 import org.apache.pinot.core.plan.AggregationGroupByPlanNode;
+import org.apache.pinot.core.plan.AggregationGroupByPlanNodeV1;
 import org.apache.pinot.core.plan.AggregationPlanNode;
 import org.apache.pinot.core.plan.CombinePlanNode;
 import org.apache.pinot.core.plan.DictionaryBasedAggregationPlanNode;
@@ -44,6 +47,9 @@ import org.apache.pinot.core.query.config.QueryExecutorConfig;
 import org.apache.pinot.core.segment.index.readers.Dictionary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.pinot.common.utils.CommonConstants.Broker.Request.*;
+import static org.apache.pinot.common.utils.CommonConstants.Broker.Request.QueryOptionKey.*;
 
 
 /**
@@ -97,6 +103,17 @@ public class InstancePlanMakerImplV2 implements PlanMaker {
   public PlanNode makeInnerSegmentPlan(IndexSegment indexSegment, BrokerRequest brokerRequest) {
     if (brokerRequest.isSetAggregationsInfo()) {
       if (brokerRequest.isSetGroupBy()) {
+        // go to the various AggregationGroupBy implementations based on GROUP_BY_MODE
+        Map<String, String> queryOptions = brokerRequest.getQueryOptions();
+        if (queryOptions != null) {
+          if (V1.equals(queryOptions.get(GROUP_BY_MODE))) {
+            return new AggregationGroupByPlanNodeV1(indexSegment, brokerRequest, _numGroupsLimit);
+          }
+          // V2
+          // V3
+          // etc
+        }
+        // default
         return new AggregationGroupByPlanNode(indexSegment, brokerRequest, _maxInitialResultHolderCapacity,
             _numGroupsLimit);
       } else {

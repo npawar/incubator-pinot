@@ -223,13 +223,14 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
     boolean preserveType = Boolean.valueOf(preserveTypeString);
 
     if (dataTableMap.isEmpty()) {
+      // even though results empty, set columns for these operations
       if (cachedDataSchema != null) {
         if (brokerRequest.isSetSelections()) {
           List<String> selectionColumns =
               SelectionOperatorUtils.getSelectionColumns(brokerRequest.getSelections().getSelectionColumns(),
                   cachedDataSchema);
           brokerResponseNative.setSelectionResults(new SelectionResults(selectionColumns, new ArrayList<>(0)));
-        } else if (brokerRequest.isSetOrderBy() && queryOptions != null && SQL.equals(
+        } else if (brokerRequest.isSetGroupBy() && queryOptions != null && SQL.equals(
             queryOptions.get(QueryOptionKey.GROUP_BY_MODE)) && SQL.equals(queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
           setSQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
               brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
@@ -271,9 +272,8 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
               preserveType);
         } else { // Aggregation group-by query.
 
-          // process group by ORDER BY results only if GROUP_BY_MODE is explicitly set to SQL
-          if (brokerRequest.isSetOrderBy() && queryOptions != null && SQL.equals(
-              queryOptions.get(QueryOptionKey.GROUP_BY_MODE))) {
+          // read results as records if  GROUP_BY_MODE is explicitly set to SQL
+          if (queryOptions != null && SQL.equals(queryOptions.get(QueryOptionKey.GROUP_BY_MODE))) {
             // sql + order by
 
             int resultSize = 0;

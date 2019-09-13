@@ -271,21 +271,27 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
               preserveType);
         } else { // Aggregation group-by query.
 
-          // read results as records if  GROUP_BY_MODE is explicitly set to SQL
-          if (queryOptions != null && SQL.equalsIgnoreCase(queryOptions.get(QueryOptionKey.GROUP_BY_MODE))) {
-            // sql + order by
+          boolean tableInDataTable = false;
+          if (queryOptions != null) {
+            String groupByMode = queryOptions.get(QueryOptionKey.GROUP_BY_MODE);
+            if (V1.equals(groupByMode) || V2.equals(groupByMode)) {
+              tableInDataTable = true;
+            }
+          }
 
-            int resultSize = 0;
-            // if RESPONSE_FORMAT is SQL, return results in {@link ResultTable}
-            if (SQL.equalsIgnoreCase(queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
-              setSQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
-                  brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
-              resultSize = brokerResponseNative.getResultTable().getRows().size();
-            } else {
-              setPQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
-                  brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
-              if (!brokerResponseNative.getAggregationResults().isEmpty()) {
-                resultSize = brokerResponseNative.getAggregationResults().get(0).getGroupByResult().size();
+          if (tableInDataTable) {
+
+              int resultSize = 0;
+              // if RESPONSE_FORMAT is SQL, return results in {@link ResultTable}
+              if (SQL.equals(queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
+                setSQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
+                    brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
+                resultSize = brokerResponseNative.getResultTable().getRows().size();
+              } else {
+                setPQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
+                    brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
+                if (!brokerResponseNative.getAggregationResults().isEmpty()) {
+                  resultSize = brokerResponseNative.getAggregationResults().get(0).getGroupByResult().size();
                 }
               }
               if (brokerMetrics != null && resultSize > 0) {

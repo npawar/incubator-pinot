@@ -173,6 +173,8 @@ public class CommonConstants {
       public static final String DEBUG_OPTIONS = "debugOptions";
       public static final String QUERY_OPTIONS = "queryOptions";
       public static final String V1 = "v1";
+      public static final String V2 = "v2";
+      public static final String V3 = "v3";
 
       public static class QueryOptionKey {
         public static final String PRESERVE_TYPE = "preserveType";

@@ -32,6 +32,7 @@ import org.apache.pinot.core.data.manager.SegmentDataManager;
 import org.apache.pinot.core.indexsegment.IndexSegment;
 import org.apache.pinot.core.plan.AggregationGroupByPlanNode;
 import org.apache.pinot.core.plan.AggregationGroupByPlanNodeV1;
+import org.apache.pinot.core.plan.AggregationGroupByPlanNodeV2;
 import org.apache.pinot.core.plan.AggregationPlanNode;
 import org.apache.pinot.core.plan.CombinePlanNode;
 import org.apache.pinot.core.plan.DictionaryBasedAggregationPlanNode;
@@ -106,8 +107,11 @@ public class InstancePlanMakerImplV2 implements PlanMaker {
         // go to the various AggregationGroupBy implementations based on GROUP_BY_MODE
         Map<String, String> queryOptions = brokerRequest.getQueryOptions();
         if (queryOptions != null) {
-          if (V1.equals(queryOptions.get(GROUP_BY_MODE))) {
+          String groupByMode = queryOptions.get(GROUP_BY_MODE);
+          if (V1.equals(groupByMode)) {
             return new AggregationGroupByPlanNodeV1(indexSegment, brokerRequest, _numGroupsLimit);
+          } else if (V2.equals(groupByMode)) {
+            return new AggregationGroupByPlanNodeV2(indexSegment, brokerRequest, _numGroupsLimit);
           }
           // V2
           // V3

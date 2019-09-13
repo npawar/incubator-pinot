@@ -1,0 +1,231 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.pinot.core.operator.query;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import javax.annotation.Nonnull;
+import org.apache.pinot.common.request.AggregationInfo;
+import org.apache.pinot.common.request.GroupBy;
+import org.apache.pinot.common.request.SelectionSort;
+import org.apache.pinot.common.request.transform.TransformExpressionTree;
+import org.apache.pinot.common.utils.DataSchema;
+import org.apache.pinot.core.common.BlockValSet;
+import org.apache.pinot.core.data.table.IndexedTable;
+import org.apache.pinot.core.data.table.Key;
+import org.apache.pinot.core.data.table.Record;
+import org.apache.pinot.core.data.table.SimpleIndexedTable;
+import org.apache.pinot.core.operator.BaseOperator;
+import org.apache.pinot.core.operator.ExecutionStatistics;
+import org.apache.pinot.core.operator.blocks.IntermediateResultsBlock;
+import org.apache.pinot.core.operator.blocks.TransformBlock;
+import org.apache.pinot.core.operator.transform.TransformOperator;
+import org.apache.pinot.core.query.aggregation.AggregationFunctionContext;
+
+
+/**
+ * The <code>AggregationOperator</code> class provides the operator for aggregation group-by query on a single segment.
+ */
+// Each operator has its own Table
+public class AggregationGroupByOperatorV2 extends BaseOperator<IntermediateResultsBlock> {
+  private static final String OPERATOR_NAME = "AggregationGroupByOperator";
+
+  private final DataSchema _dataSchema;
+
+  private final List<AggregationInfo> _aggregationInfos;
+  private final AggregationFunctionContext[] _functionContexts;
+  private final GroupBy _groupBy;
+  private final List<SelectionSort> _orderBy;
+  private final TransformExpressionTree[] _groupByExpressions;
+  private final TransformExpressionTree[] _aggregationExpressions;
+  private final int _numGroupsLimit;
+  private final int _numColumns;
+  private final int _numGroupBy;
+  private final int _numAggregations;
+  private final DataSchema.ColumnDataType[] _columnDataTypes;
+  private final TransformOperator _transformOperator;
+  private final long _numTotalRawDocs;
+  private final boolean _useStarTree;
+
+  private ExecutionStatistics _executionStatistics;
+
+  public AggregationGroupByOperatorV2(@Nonnull List<AggregationInfo> aggregationInfos,
+      @Nonnull AggregationFunctionContext[] functionContexts, @Nonnull GroupBy groupBy, List<SelectionSort> orderBy,
+      int numGroupsLimit, @Nonnull TransformOperator transformOperator, long numTotalRawDocs, boolean useStarTree) {
+    _aggregationInfos = aggregationInfos;
+    _functionContexts = functionContexts;
+    _groupBy = groupBy;
+    _orderBy = orderBy;
+    _numGroupsLimit = numGroupsLimit;
+    _transformOperator = transformOperator;
+    _numTotalRawDocs = numTotalRawDocs;
+    _useStarTree = useStarTree;
+
+    _numGroupBy = groupBy.getExpressionsSize();
+    _numAggregations = _functionContexts.length;
+    _numColumns = _numAggregations + _numGroupBy;
+    _groupByExpressions = new TransformExpressionTree[groupBy.getExpressionsSize()];
+    _aggregationExpressions = new TransformExpressionTree[_functionContexts.length];
+    String[] columnNames = new String[_numColumns];
+    _columnDataTypes = new DataSchema.ColumnDataType[_numColumns];
+
+    Map<String, DataSchema.ColumnDataType> columnToDataType = new HashMap<>(_numColumns);
+    for (TransformExpressionTree transformExpression : _transformOperator.getExpressions()) {
+      columnToDataType.put(transformExpression.toString(), DataSchema.ColumnDataType.fromDataType(
+          _transformOperator.getResultMetadata(transformExpression).getDataType(), true));
+    }
+
+    // extract column names and data types for group by keys
+    int index = 0;
+    int groupByIndex = 0;
+    for (String groupByExpression : groupBy.getExpressions()) {
+      _groupByExpressions[groupByIndex++] = TransformExpressionTree.compileToExpressionTree(groupByExpression);
+      columnNames[index] = groupByExpression;
+      _columnDataTypes[index] = columnToDataType.get(groupByExpression);
+      index++;
+    }
+
+    // extract column names and data types for aggregations
+    int aggregationIndex = 0;
+    for (AggregationFunctionContext functionContext : functionContexts) {
+      _aggregationExpressions[aggregationIndex++] = TransformExpressionTree.compileToExpressionTree(functionContext.getColumn());
+      columnNames[index] = functionContext.getAggregationFunction().getType().toString().toLowerCase() + "("
+          + functionContext.getColumn() + ")";
+      _columnDataTypes[index] = functionContext.getAggregationFunction().getIntermediateResultColumnType();
+      index++;
+    }
+
+    _dataSchema = new DataSchema(columnNames, _columnDataTypes);
+  }
+
+  @Override
+  protected IntermediateResultsBlock getNextBlock() {
+    IndexedTable indexedTable = new SimpleIndexedTable();
+    indexedTable.init(_dataSchema, _aggregationInfos, _orderBy, _numGroupsLimit, false);
+
+    int numDocsScanned = 0;
+
+    TransformBlock transformBlock;
+    while ((transformBlock = _transformOperator.nextBlock()) != null) {
+      int numDocs = transformBlock.getNumDocs();
+      numDocsScanned += numDocs;
+
+      List<Object[]> valuesList = new ArrayList<>(_numColumns);
+
+      // TODO: Multi value
+      int index = 0;
+      for (TransformExpressionTree groupByExpression : _groupByExpressions) {
+        BlockValSet blockValueSet = transformBlock.getBlockValueSet(groupByExpression);
+        DataSchema.ColumnDataType columnDataType = _columnDataTypes[index++];
+        valuesList.add(getValues(blockValueSet, numDocs, columnDataType));
+      }
+
+      // TODO: handle count(*)
+      for (TransformExpressionTree aggregationExpression : _aggregationExpressions) {
+        BlockValSet blockValueSet = transformBlock.getBlockValueSet(aggregationExpression);
+        DataSchema.ColumnDataType columnDataType = _columnDataTypes[index++];
+        valuesList.add(getValues(blockValueSet, numDocs, columnDataType));
+      }
+
+      for (int docId = 0; docId < numDocs; docId++) {
+        Object[] groupByValues = new Object[_numGroupBy];
+        Object[] aggregationValues = new Object[_numAggregations];
+
+        index = 0;
+        for (int groupByIndex = 0; groupByIndex < _numGroupBy; groupByIndex++) {
+          groupByValues[groupByIndex] = valuesList.get(index++)[docId];
+        }
+        for (int aggregationIndex = 0; aggregationIndex < _numAggregations; aggregationIndex++) {
+          aggregationValues[aggregationIndex] = valuesList.get(index++)[docId];
+        }
+
+        Record record = new Record(new Key(groupByValues), aggregationValues);
+        indexedTable.upsert(record);
+      }
+    }
+
+
+    // Gather execution statistics
+    long numEntriesScannedInFilter = _transformOperator.getExecutionStatistics().getNumEntriesScannedInFilter();
+    long numEntriesScannedPostFilter = numDocsScanned * _transformOperator.getNumColumnsProjected();
+    _executionStatistics =
+        new ExecutionStatistics(numDocsScanned, numEntriesScannedInFilter, numEntriesScannedPostFilter,
+            _numTotalRawDocs);
+
+    // Build intermediate result block based on aggregation group-by result from the executor
+    return new IntermediateResultsBlock(indexedTable);
+  }
+
+  private Object[] getValues(BlockValSet blockValueSet, int numDocs, DataSchema.ColumnDataType columnDataType) {
+    Object[] values = new Object[numDocs];
+    switch (columnDataType) {
+
+      case INT:
+        int[] intValues = blockValueSet.getIntValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = intValues[i];
+        }
+        break;
+      case LONG:
+        long[] longValues = blockValueSet.getLongValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = longValues[i];
+        }
+        break;
+      case FLOAT:
+        float[] floatValues = blockValueSet.getFloatValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = floatValues[i];
+        }
+        break;
+      case DOUBLE:
+        double[] doubleValues = blockValueSet.getDoubleValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = doubleValues[i];
+        }
+        break;
+      case STRING:
+        String[] stringValues = blockValueSet.getStringValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = stringValues[i];
+        }
+        break;
+      case BYTES:
+        byte[][] bytesValues = blockValueSet.getBytesValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = bytesValues[i];
+        }
+        break;
+    }
+    return values;
+  }
+
+
+  @Override
+  public String getOperatorName() {
+    return OPERATOR_NAME;
+  }
+
+  @Override
+  public ExecutionStatistics getExecutionStatistics() {
+    return _executionStatistics;
+  }
+}

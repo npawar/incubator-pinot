@@ -29,6 +29,7 @@ import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.core.common.Operator;
 import org.apache.pinot.core.operator.CombineGroupByOperator;
 import org.apache.pinot.core.operator.CombineGroupByOperatorV1;
+import org.apache.pinot.core.operator.CombineGroupByOperatorV2;
 import org.apache.pinot.core.operator.CombineGroupByOrderByOperator;
 import org.apache.pinot.core.operator.CombineOperator;
 import org.apache.pinot.core.query.exception.BadQueryRequestException;
@@ -149,8 +150,11 @@ public class CombinePlanNode implements PlanNode {
       // Aggregation group-by query
       Map<String, String> queryOptions = _brokerRequest.getQueryOptions();
       if (queryOptions != null) {
-        if (V1.equalsIgnoreCase(queryOptions.get(QueryOptionKey.GROUP_BY_MODE))) {
+        String groupByMode = queryOptions.get(QueryOptionKey.GROUP_BY_MODE);
+        if (V1.equalsIgnoreCase(groupByMode)) {
           return new CombineGroupByOperatorV1(operators, _brokerRequest, _executorService, _timeOutMs, _numGroupsLimit);
+        } else if (V2.equalsIgnoreCase(groupByMode)) {
+          return new CombineGroupByOperatorV2(operators, _brokerRequest, _numGroupsLimit);
         }
         // V2, V3 etc for various implementations
       }

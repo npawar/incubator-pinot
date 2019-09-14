@@ -19,10 +19,12 @@
 package org.apache.pinot.core.operator.query;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nonnull;
+import org.apache.pinot.common.function.AggregationFunctionType;
 import org.apache.pinot.common.request.AggregationInfo;
 import org.apache.pinot.common.request.GroupBy;
 import org.apache.pinot.common.request.SelectionSort;
@@ -60,6 +62,7 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
   private final int _numColumns;
   private final int _numGroupBy;
   private final int _numAggregations;
+  private final String[] _columnNames;
   private final DataSchema.ColumnDataType[] _columnDataTypes;
   private final TransformOperator _transformOperator;
   private final long _numTotalRawDocs;
@@ -84,7 +87,7 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
     _numColumns = _numAggregations + _numGroupBy;
     _groupByExpressions = new TransformExpressionTree[groupBy.getExpressionsSize()];
     _aggregationExpressions = new TransformExpressionTree[_functionContexts.length];
-    String[] columnNames = new String[_numColumns];
+    _columnNames = new String[_numColumns];
     _columnDataTypes = new DataSchema.ColumnDataType[_numColumns];
 
     Map<String, DataSchema.ColumnDataType> columnToDataType = new HashMap<>(_numColumns);
@@ -93,27 +96,31 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
           _transformOperator.getResultMetadata(transformExpression).getDataType(), true));
     }
 
-    // extract column names and data types for group by keys
     int index = 0;
-    int groupByIndex = 0;
-    for (String groupByExpression : groupBy.getExpressions()) {
-      _groupByExpressions[groupByIndex++] = TransformExpressionTree.compileToExpressionTree(groupByExpression);
-      columnNames[index] = groupByExpression;
+
+    // extract column names and data types for group by keys
+    List<String> expressions = groupBy.getExpressions();
+    for (int i = 0; i < _numGroupBy; i++) {
+      String groupByExpression = expressions.get(i);
+      _groupByExpressions[i] = TransformExpressionTree.compileToExpressionTree(groupByExpression);
+      _columnNames[index] = groupByExpression;
       _columnDataTypes[index] = columnToDataType.get(groupByExpression);
       index++;
     }
 
     // extract column names and data types for aggregations
-    int aggregationIndex = 0;
-    for (AggregationFunctionContext functionContext : functionContexts) {
-      _aggregationExpressions[aggregationIndex++] = TransformExpressionTree.compileToExpressionTree(functionContext.getColumn());
-      columnNames[index] = functionContext.getAggregationFunction().getType().toString().toLowerCase() + "("
+    for (int i = 0; i < _numAggregations; i++) {
+      AggregationFunctionContext functionContext = functionContexts[i];
+      if (functionContext.getAggregationFunction().getType() != AggregationFunctionType.COUNT) {
+        _aggregationExpressions[i] = TransformExpressionTree.compileToExpressionTree(functionContext.getColumn());
+      }
+      _columnNames[index] = functionContext.getAggregationFunction().getType().toString().toLowerCase() + "("
           + functionContext.getColumn() + ")";
       _columnDataTypes[index] = functionContext.getAggregationFunction().getIntermediateResultColumnType();
       index++;
     }
 
-    _dataSchema = new DataSchema(columnNames, _columnDataTypes);
+    _dataSchema = new DataSchema(_columnNames, _columnDataTypes);
   }
 
   @Override
@@ -128,21 +135,26 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
       int numDocs = transformBlock.getNumDocs();
       numDocsScanned += numDocs;
 
-      List<Object[]> valuesList = new ArrayList<>(_numColumns);
+      Object[][] valuesList = new Object[_numColumns][];
 
       // TODO: Multi value
       int index = 0;
-      for (TransformExpressionTree groupByExpression : _groupByExpressions) {
-        BlockValSet blockValueSet = transformBlock.getBlockValueSet(groupByExpression);
-        DataSchema.ColumnDataType columnDataType = _columnDataTypes[index++];
-        valuesList.add(getValues(blockValueSet, numDocs, columnDataType));
+      for (int i = 0; i < _numGroupBy; i++) {
+        BlockValSet blockValueSet = transformBlock.getBlockValueSet(_groupByExpressions[i]);
+        DataSchema.ColumnDataType columnDataType = _columnDataTypes[index];
+        valuesList[index] = getValues(blockValueSet, numDocs, columnDataType);
+        index++;
       }
 
-      // TODO: handle count(*)
-      for (TransformExpressionTree aggregationExpression : _aggregationExpressions) {
-        BlockValSet blockValueSet = transformBlock.getBlockValueSet(aggregationExpression);
-        DataSchema.ColumnDataType columnDataType = _columnDataTypes[index++];
-        valuesList.add(getValues(blockValueSet, numDocs, columnDataType));
+      for (int i = 0; i < _numAggregations; i++) {
+        if (_functionContexts[i].getAggregationFunction().getType() == AggregationFunctionType.COUNT) {
+          valuesList[index] = getCountValues(numDocs);
+        } else {
+          BlockValSet blockValueSet = transformBlock.getBlockValueSet(_aggregationExpressions[i]);
+          DataSchema.ColumnDataType columnDataType = _columnDataTypes[index];
+          valuesList[index] = getValues(blockValueSet, numDocs, columnDataType);
+        }
+        index++;
       }
 
       for (int docId = 0; docId < numDocs; docId++) {
@@ -151,10 +163,10 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
 
         index = 0;
         for (int groupByIndex = 0; groupByIndex < _numGroupBy; groupByIndex++) {
-          groupByValues[groupByIndex] = valuesList.get(index++)[docId];
+          groupByValues[groupByIndex] = valuesList[index++][docId];
         }
         for (int aggregationIndex = 0; aggregationIndex < _numAggregations; aggregationIndex++) {
-          aggregationValues[aggregationIndex] = valuesList.get(index++)[docId];
+          aggregationValues[aggregationIndex] = valuesList[index++][docId];
         }
 
         Record record = new Record(new Key(groupByValues), aggregationValues);
@@ -172,6 +184,12 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
 
     // Build intermediate result block based on aggregation group-by result from the executor
     return new IntermediateResultsBlock(indexedTable);
+  }
+
+  private Object[] getCountValues(int numDocs) {
+    Object[] values = new Object[numDocs];
+    Arrays.fill(values, 1L);
+    return values;
   }
 
   private Object[] getValues(BlockValSet blockValueSet, int numDocs, DataSchema.ColumnDataType columnDataType) {

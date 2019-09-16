@@ -18,11 +18,13 @@
  */
 package org.apache.pinot.core.operator.query;
 
+import com.google.common.collect.Sets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.annotation.Nonnull;
 import org.apache.pinot.common.function.AggregationFunctionType;
 import org.apache.pinot.common.request.AggregationInfo;
@@ -40,6 +42,7 @@ import org.apache.pinot.core.operator.ExecutionStatistics;
 import org.apache.pinot.core.operator.blocks.IntermediateResultsBlock;
 import org.apache.pinot.core.operator.blocks.TransformBlock;
 import org.apache.pinot.core.operator.transform.TransformOperator;
+import org.apache.pinot.core.operator.transform.TransformResultMetadata;
 import org.apache.pinot.core.query.aggregation.AggregationFunctionContext;
 
 
@@ -57,6 +60,8 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
   private final GroupBy _groupBy;
   private final List<SelectionSort> _orderBy;
   private final TransformExpressionTree[] _groupByExpressions;
+  private final boolean[] _isSingleValue;
+  private final boolean _hasMV;
   private final TransformExpressionTree[] _aggregationExpressions;
   private final int _numGroupsLimit;
   private final int _numColumns;
@@ -85,16 +90,24 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
     _numGroupBy = groupBy.getExpressionsSize();
     _numAggregations = _functionContexts.length;
     _numColumns = _numAggregations + _numGroupBy;
-    _groupByExpressions = new TransformExpressionTree[groupBy.getExpressionsSize()];
-    _aggregationExpressions = new TransformExpressionTree[_functionContexts.length];
+    _groupByExpressions = new TransformExpressionTree[_numGroupBy];
+    _isSingleValue = new boolean[_numGroupBy];
+    _aggregationExpressions = new TransformExpressionTree[_numAggregations];
     _columnNames = new String[_numColumns];
     _columnDataTypes = new DataSchema.ColumnDataType[_numColumns];
 
     Map<String, DataSchema.ColumnDataType> columnToDataType = new HashMap<>(_numColumns);
+    Map<String, Boolean> columnToIsSingleValue = new HashMap<>(_numColumns);
+    boolean hasMV = false;
     for (TransformExpressionTree transformExpression : _transformOperator.getExpressions()) {
-      columnToDataType.put(transformExpression.toString(), DataSchema.ColumnDataType.fromDataType(
-          _transformOperator.getResultMetadata(transformExpression).getDataType(), true));
+      TransformResultMetadata resultMetadata = _transformOperator.getResultMetadata(transformExpression);
+      String transformExpressionString = transformExpression.toString();
+      columnToDataType.put(transformExpressionString,
+          DataSchema.ColumnDataType.fromDataType(resultMetadata.getDataType(), true));
+      columnToIsSingleValue.put(transformExpressionString, resultMetadata.isSingleValue());
+      hasMV |= !resultMetadata.isSingleValue();
     }
+    _hasMV = hasMV;
 
     int index = 0;
 
@@ -105,6 +118,7 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
       _groupByExpressions[i] = TransformExpressionTree.compileToExpressionTree(groupByExpression);
       _columnNames[index] = groupByExpression;
       _columnDataTypes[index] = columnToDataType.get(groupByExpression);
+      _isSingleValue[i] = columnToIsSingleValue.get(groupByExpression);
       index++;
     }
 
@@ -137,12 +151,15 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
 
       Object[][] valuesList = new Object[_numColumns][];
 
-      // TODO: Multi value
       int index = 0;
       for (int i = 0; i < _numGroupBy; i++) {
         BlockValSet blockValueSet = transformBlock.getBlockValueSet(_groupByExpressions[i]);
         DataSchema.ColumnDataType columnDataType = _columnDataTypes[index];
-        valuesList[index] = getValues(blockValueSet, numDocs, columnDataType);
+        if (_isSingleValue[i]) {
+          valuesList[index] = getValuesSV(blockValueSet, numDocs, columnDataType);
+        } else {
+          valuesList[index] = getValuesMV(blockValueSet, numDocs, columnDataType);
+        }
         index++;
       }
 
@@ -152,7 +169,7 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
         } else {
           BlockValSet blockValueSet = transformBlock.getBlockValueSet(_aggregationExpressions[i]);
           DataSchema.ColumnDataType columnDataType = _columnDataTypes[index];
-          valuesList[index] = getValues(blockValueSet, numDocs, columnDataType);
+          valuesList[index] = getValuesSV(blockValueSet, numDocs, columnDataType);
         }
         index++;
       }
@@ -169,8 +186,23 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
           aggregationValues[aggregationIndex] = valuesList[index++][docId];
         }
 
-        Record record = new Record(new Key(groupByValues), aggregationValues);
-        indexedTable.upsert(record);
+        if (_hasMV) {
+          List<Set<Object>> sets = new ArrayList<>();
+          for (Object groupByValue : groupByValues) {
+            // FIXME: cannot cast primitive type array here
+            Object[] array = (Object[]) groupByValue;
+            sets.add(Sets.newHashSet(array));
+          }
+          // cartesian product
+          Set<List<Object>> cartesianProduct = Sets.cartesianProduct(sets);
+          for (List<Object> combination : cartesianProduct) {
+            Record record = new Record(new Key(combination.toArray()), aggregationValues.clone());
+            indexedTable.upsert(record);
+          }
+        } else {
+          Record record = new Record(new Key(groupByValues), aggregationValues);
+          indexedTable.upsert(record);
+        }
       }
     }
 
@@ -192,7 +224,7 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
     return values;
   }
 
-  private Object[] getValues(BlockValSet blockValueSet, int numDocs, DataSchema.ColumnDataType columnDataType) {
+  private Object[] getValuesSV(BlockValSet blockValueSet, int numDocs, DataSchema.ColumnDataType columnDataType) {
     Object[] values = new Object[numDocs];
     switch (columnDataType) {
 
@@ -236,6 +268,49 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
     return values;
   }
 
+  private Object[] getValuesMV(BlockValSet blockValueSet, int numDocs, DataSchema.ColumnDataType columnDataType) {
+    Object[] values = new Object[numDocs];
+    switch (columnDataType) {
+
+      case INT:
+        int[][] intValues = blockValueSet.getIntValuesMV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = intValues[i];
+        }
+        break;
+      case LONG:
+        long[][] longValues = blockValueSet.getLongValuesMV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = longValues[i];
+        }
+        break;
+      case FLOAT:
+        float[][] floatValues = blockValueSet.getFloatValuesMV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = floatValues[i];
+        }
+        break;
+      case DOUBLE:
+        double[][] doubleValues = blockValueSet.getDoubleValuesMV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = doubleValues[i];
+        }
+        break;
+      case STRING:
+        String[][] stringValues = blockValueSet.getStringValuesMV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = stringValues[i];
+        }
+        break;
+      case BYTES:
+        byte[][] bytesValues = blockValueSet.getBytesValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = bytesValues[i];
+        }
+        break;
+    }
+    return values;
+  }
 
   @Override
   public String getOperatorName() {

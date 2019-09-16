@@ -165,6 +165,8 @@ public class AggregationGroupByOperatorV2 extends BaseOperator<IntermediateResul
         for (int groupByIndex = 0; groupByIndex < _numGroupBy; groupByIndex++) {
           groupByValues[groupByIndex] = valuesList[index++][docId];
         }
+
+        // for multi value, generate all combinations
         for (int aggregationIndex = 0; aggregationIndex < _numAggregations; aggregationIndex++) {
           aggregationValues[aggregationIndex] = valuesList[index++][docId];
         }

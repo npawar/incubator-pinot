@@ -18,10 +18,9 @@
  */
 package org.apache.pinot.core.query.reduce;
 
-import com.google.common.collect.Lists;
+import io.vavr.CheckedFunction2;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -52,8 +51,7 @@ import org.apache.pinot.common.response.broker.GroupByResult;
 import org.apache.pinot.common.response.broker.QueryProcessingException;
 import org.apache.pinot.common.response.broker.ResultTable;
 import org.apache.pinot.common.response.broker.SelectionResults;
-import org.apache.pinot.common.utils.CommonConstants;
-import org.apache.pinot.common.utils.CommonConstants.Broker.Request.QueryOptionKey;
+import org.apache.pinot.common.utils.CommonConstants.Broker.Request.*;
 import org.apache.pinot.common.utils.DataSchema;
 import org.apache.pinot.common.utils.DataSchema.ColumnDataType;
 import org.apache.pinot.common.utils.DataTable;
@@ -230,8 +228,9 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
               SelectionOperatorUtils.getSelectionColumns(brokerRequest.getSelections().getSelectionColumns(),
                   cachedDataSchema);
           brokerResponseNative.setSelectionResults(new SelectionResults(selectionColumns, new ArrayList<>(0)));
-        } else if (brokerRequest.isSetGroupBy() && queryOptions != null && SQL.equals(
-            queryOptions.get(QueryOptionKey.GROUP_BY_MODE)) && SQL.equals(queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
+        } else if (brokerRequest.isSetGroupBy() && queryOptions != null && SQL.equalsIgnoreCase(
+            queryOptions.get(QueryOptionKey.GROUP_BY_MODE)) && SQL.equalsIgnoreCase(
+            queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
           setSQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
               brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
         }
@@ -273,12 +272,12 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
         } else { // Aggregation group-by query.
 
           // read results as records if  GROUP_BY_MODE is explicitly set to SQL
-          if (queryOptions != null && SQL.equals(queryOptions.get(QueryOptionKey.GROUP_BY_MODE))) {
+          if (queryOptions != null && SQL.equalsIgnoreCase(queryOptions.get(QueryOptionKey.GROUP_BY_MODE))) {
             // sql + order by
 
             int resultSize = 0;
             // if RESPONSE_FORMAT is SQL, return results in {@link ResultTable}
-            if (SQL.equals(queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
+            if (SQL.equalsIgnoreCase(queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
               setSQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
                   brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
               resultSize = brokerResponseNative.getResultTable().getRows().size();
@@ -457,8 +456,13 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
     int numGroupBy = groupBy.getExpressionsSize();
     int numAggregations = aggregationInfos.size();
 
-    IndexedTable indexedTable =
-        getIndexedTable(numGroupBy, numAggregations, groupBy, aggregationInfos, orderBy, dataSchema, dataTableMap);
+    IndexedTable indexedTable;
+    try {
+      indexedTable =
+          getIndexedTable(numGroupBy, numAggregations, groupBy, aggregationInfos, orderBy, dataSchema, dataTableMap);
+    } catch (Throwable throwable) {
+      throw new IllegalStateException(throwable);
+    }
 
     List<AggregationFunction> aggregationFunctions = new ArrayList<>(aggregationInfos.size());
     for (AggregationInfo aggregationInfo : aggregationInfos) {
@@ -494,7 +498,8 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
   }
 
   private IndexedTable getIndexedTable(int numGroupBy, int numAggregations, GroupBy groupBy,
-      List<AggregationInfo> aggregationInfos, List<SelectionSort> orderBy, DataSchema dataSchema, Map<ServerInstance, DataTable> dataTableMap) {
+      List<AggregationInfo> aggregationInfos, List<SelectionSort> orderBy, DataSchema dataSchema, Map<ServerInstance, DataTable> dataTableMap)
+      throws Throwable {
 
     IndexedTable indexedTable = new ConcurrentIndexedTable();
     // setting a higher value to avoid frequent resizing
@@ -502,53 +507,43 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
     indexedTable.init(dataSchema, aggregationInfos, orderBy, capacity, true);
 
     for (DataTable dataTable : dataTableMap.values()) {
+      CheckedFunction2[] functions = new CheckedFunction2[dataSchema.size()];
+      for (int i = 0; i < dataSchema.size(); i++) {
+        ColumnDataType columnDataType = dataSchema.getColumnDataType(i);
+        CheckedFunction2<Integer, Integer, Object> function;
+        switch (columnDataType) {
+
+          case INT:
+            function = (CheckedFunction2<Integer, Integer, Object>) dataTable::getInt;
+            break;
+          case LONG:
+            function = (CheckedFunction2<Integer, Integer, Object>) dataTable::getLong;
+            break;
+          case FLOAT:
+            function = (CheckedFunction2<Integer, Integer, Object>) dataTable::getFloat;
+            break;
+          case DOUBLE:
+            function = (CheckedFunction2<Integer, Integer, Object>) dataTable::getDouble;
+            break;
+          case STRING:
+            function = (CheckedFunction2<Integer, Integer, Object>) dataTable::getString;
+            break;
+          default:
+            function = (CheckedFunction2<Integer, Integer, Object>) dataTable::getObject;
+        }
+        functions[i] = function;
+      }
+
       for (int row = 0; row < dataTable.getNumberOfRows(); row++) {
         Object[] key = new Object[numGroupBy];
         int col = 0;
         for (int j = 0; j < numGroupBy; j++) {
-          ColumnDataType columnDataType = dataSchema.getColumnDataType(col);
-          switch (columnDataType) {
-
-            case INT:
-              key[j] = dataTable.getInt(row, col);
-              break;
-            case LONG:
-              key[j] = dataTable.getLong(row, col);
-              break;
-            case FLOAT:
-              key[j] = dataTable.getFloat(row, col);
-              break;
-            case DOUBLE:
-              key[j] = dataTable.getDouble(row, col);
-              break;
-            case STRING:
-              key[j] = dataTable.getString(row, col);
-              break;
-            default:
-              key[j] = dataTable.getObject(row, col);
-          }
+          key[j] = functions[col].apply(row, col);
           col ++;
         }
         Object[] value = new Object[numAggregations];
         for (int j = 0; j < numAggregations; j++) {
-          ColumnDataType columnDataType = dataSchema.getColumnDataType(col);
-          switch (columnDataType) {
-
-            case INT:
-              value[j] = dataTable.getInt(row, col);
-              break;
-            case LONG:
-              value[j] = dataTable.getLong(row, col);
-              break;
-            case FLOAT:
-              value[j] = dataTable.getFloat(row, col);
-              break;
-            case DOUBLE:
-              value[j] = dataTable.getDouble(row, col);
-              break;
-            default:
-              value[j] = dataTable.getObject(row, col);
-          }
+          value[j] = functions[col].apply(row, col);
           col ++;
         }
         Record record = new Record(new Key(key), value);
@@ -599,8 +594,13 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
     }
 
     if (!dataTableMap.isEmpty()) {
-      IndexedTable indexedTable =
-          getIndexedTable(numGroupBy, numAggregations, groupBy, aggregationInfos, orderBy, dataSchema, dataTableMap);
+      IndexedTable indexedTable;
+      try {
+        indexedTable =
+            getIndexedTable(numGroupBy, numAggregations, groupBy, aggregationInfos, orderBy, dataSchema, dataTableMap);
+      } catch (Throwable throwable) {
+        throw new IllegalStateException(throwable);
+      }
 
       Iterator<Record> sortedIterator = indexedTable.iterator();
       int numRows = 0;

@@ -18,13 +18,10 @@
  */
 package org.apache.pinot.core.operator.query;
 
-import com.google.common.collect.Sets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import javax.annotation.Nonnull;
 import org.apache.pinot.common.function.AggregationFunctionType;
 import org.apache.pinot.common.request.AggregationInfo;
@@ -37,7 +34,6 @@ import org.apache.pinot.core.data.table.IndexedTable;
 import org.apache.pinot.core.data.table.Key;
 import org.apache.pinot.core.data.table.Record;
 import org.apache.pinot.core.data.table.SimpleIndexedTable;
-import org.apache.pinot.core.operator.BaseOperator;
 import org.apache.pinot.core.operator.ExecutionStatistics;
 import org.apache.pinot.core.operator.blocks.IntermediateResultsBlock;
 import org.apache.pinot.core.operator.blocks.TransformBlock;
@@ -50,14 +46,13 @@ import org.apache.pinot.core.query.aggregation.AggregationFunctionContext;
  * The <code>AggregationOperator</code> class provides the operator for aggregation group-by query on a single segment.
  */
 // Each operator has its own Table
-public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResultsBlock> {
+public class AggregationGroupByOperatorV1 extends BaseAggregationGroupByOperator {
   private static final String OPERATOR_NAME = "AggregationGroupByOperator";
 
   private final DataSchema _dataSchema;
 
   private final List<AggregationInfo> _aggregationInfos;
   private final AggregationFunctionContext[] _functionContexts;
-  private final GroupBy _groupBy;
   private final List<SelectionSort> _orderBy;
   private final TransformExpressionTree[] _groupByExpressions;
   private final boolean[] _isSingleValue;
@@ -80,7 +75,6 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
       int numGroupsLimit, @Nonnull TransformOperator transformOperator, long numTotalRawDocs, boolean useStarTree) {
     _aggregationInfos = aggregationInfos;
     _functionContexts = functionContexts;
-    _groupBy = groupBy;
     _orderBy = orderBy;
     _numGroupsLimit = numGroupsLimit;
     _transformOperator = transformOperator;
@@ -178,28 +172,37 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
         Object[] groupByValues = new Object[_numGroupBy];
         Object[] aggregationValues = new Object[_numAggregations];
 
-        index = 0;
-        for (int groupByIndex = 0; groupByIndex < _numGroupBy; groupByIndex++) {
-          groupByValues[groupByIndex] = valuesList[index++][docId];
-        }
-        for (int aggregationIndex = 0; aggregationIndex < _numAggregations; aggregationIndex++) {
-          aggregationValues[aggregationIndex] = valuesList[index++][docId];
-        }
-
         if (_hasMV) {
-          List<Set<Object>> sets = new ArrayList<>();
-          for (Object groupByValue : groupByValues) {
-            // FIXME: cannot cast primitive type array here
-            Object[] array = (Object[]) groupByValue;
-            sets.add(Sets.newHashSet(array));
+          index = 0;
+          List<Object[]> sets = new ArrayList<>(_numGroupBy);
+          for (int groupByIndex = 0; groupByIndex < _numGroupBy; groupByIndex++) {
+            Object value = valuesList[index][docId];
+            Object[] set;
+            if (_isSingleValue[index]) {
+              set = new Object[]{value};
+            } else {
+              set = (Object[]) value;
+            }
+            sets.add(set);
+            index++;
           }
-          // cartesian product
-          Set<List<Object>> cartesianProduct = Sets.cartesianProduct(sets);
-          for (List<Object> combination : cartesianProduct) {
-            Record record = new Record(new Key(combination.toArray()), aggregationValues.clone());
+          for (int aggregationIndex = 0; aggregationIndex < _numAggregations; aggregationIndex++) {
+            aggregationValues[aggregationIndex] = valuesList[index++][docId];
+          }
+
+          List<Object[]> cartesianProduct = cartesianProduct(sets);
+          for (Object[] combination : cartesianProduct) {
+            Record record = new Record(new Key(combination), aggregationValues.clone());
             indexedTable.upsert(record);
           }
         } else {
+          index = 0;
+          for (int groupByIndex = 0; groupByIndex < _numGroupBy; groupByIndex++) {
+            groupByValues[groupByIndex] = valuesList[index++][docId];
+          }
+          for (int aggregationIndex = 0; aggregationIndex < _numAggregations; aggregationIndex++) {
+            aggregationValues[aggregationIndex] = valuesList[index++][docId];
+          }
           Record record = new Record(new Key(groupByValues), aggregationValues);
           indexedTable.upsert(record);
         }
@@ -216,100 +219,6 @@ public class AggregationGroupByOperatorV1 extends BaseOperator<IntermediateResul
 
     // Build intermediate result block based on aggregation group-by result from the executor
     return new IntermediateResultsBlock(indexedTable);
-  }
-
-  private Object[] getCountValues(int numDocs) {
-    Object[] values = new Object[numDocs];
-    Arrays.fill(values, 1L);
-    return values;
-  }
-
-  private Object[] getValuesSV(BlockValSet blockValueSet, int numDocs, DataSchema.ColumnDataType columnDataType) {
-    Object[] values = new Object[numDocs];
-    switch (columnDataType) {
-
-      case INT:
-        int[] intValues = blockValueSet.getIntValuesSV();
-        for (int i = 0; i < numDocs; i++) {
-          values[i] = intValues[i];
-        }
-        break;
-      case LONG:
-        long[] longValues = blockValueSet.getLongValuesSV();
-        for (int i = 0; i < numDocs; i++) {
-          values[i] = longValues[i];
-        }
-        break;
-      case FLOAT:
-        float[] floatValues = blockValueSet.getFloatValuesSV();
-        for (int i = 0; i < numDocs; i++) {
-          values[i] = floatValues[i];
-        }
-        break;
-      case DOUBLE:
-        double[] doubleValues = blockValueSet.getDoubleValuesSV();
-        for (int i = 0; i < numDocs; i++) {
-          values[i] = doubleValues[i];
-        }
-        break;
-      case STRING:
-        String[] stringValues = blockValueSet.getStringValuesSV();
-        for (int i = 0; i < numDocs; i++) {
-          values[i] = stringValues[i];
-        }
-        break;
-      case BYTES:
-        byte[][] bytesValues = blockValueSet.getBytesValuesSV();
-        for (int i = 0; i < numDocs; i++) {
-          values[i] = bytesValues[i];
-        }
-        break;
-    }
-    return values;
-  }
-
-  private Object[] getValuesMV(BlockValSet blockValueSet, int numDocs, DataSchema.ColumnDataType columnDataType) {
-    Object[] values = new Object[numDocs];
-    switch (columnDataType) {
-
-      case INT:
-        int[][] intValues = blockValueSet.getIntValuesMV();
-        for (int i = 0; i < numDocs; i++) {
-          values[i] = intValues[i];
-        }
-        break;
-      case LONG:
-        long[][] longValues = blockValueSet.getLongValuesMV();
-        for (int i = 0; i < numDocs; i++) {
-          values[i] = longValues[i];
-        }
-        break;
-      case FLOAT:
-        float[][] floatValues = blockValueSet.getFloatValuesMV();
-        for (int i = 0; i < numDocs; i++) {
-          values[i] = floatValues[i];
-        }
-        break;
-      case DOUBLE:
-        double[][] doubleValues = blockValueSet.getDoubleValuesMV();
-        for (int i = 0; i < numDocs; i++) {
-          values[i] = doubleValues[i];
-        }
-        break;
-      case STRING:
-        String[][] stringValues = blockValueSet.getStringValuesMV();
-        for (int i = 0; i < numDocs; i++) {
-          values[i] = stringValues[i];
-        }
-        break;
-      case BYTES:
-        byte[][] bytesValues = blockValueSet.getBytesValuesSV();
-        for (int i = 0; i < numDocs; i++) {
-          values[i] = bytesValues[i];
-        }
-        break;
-    }
-    return values;
   }
 
   @Override

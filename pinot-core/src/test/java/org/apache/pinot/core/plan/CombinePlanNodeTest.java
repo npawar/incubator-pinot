@@ -33,6 +33,8 @@ import org.testng.annotations.Test;
 
 public class CombinePlanNodeTest {
   private ExecutorService _executorService = Executors.newFixedThreadPool(10);
+  private InstancePlanMakerImplV2 instancePlanMakerImplV2 = new InstancePlanMakerImplV2();
+
 
   /**
    * Tests that the tasks are executed as expected in parallel mode.
@@ -61,7 +63,7 @@ public class CombinePlanNodeTest {
         });
       }
       CombinePlanNode combinePlanNode = new CombinePlanNode(planNodes, new BrokerRequest(), _executorService, 1000,
-          InstancePlanMakerImplV2.DEFAULT_NUM_GROUPS_LIMIT);
+          instancePlanMakerImplV2.getNumGroupsLimit(), instancePlanMakerImplV2.getInterSegmentNumGroupsLimit());
       combinePlanNode.run();
       Assert.assertEquals(numPlans, count.get());
     }
@@ -90,7 +92,8 @@ public class CombinePlanNodeTest {
       });
     }
     CombinePlanNode combinePlanNode =
-        new CombinePlanNode(planNodes, null, _executorService, 0, InstancePlanMakerImplV2.DEFAULT_NUM_GROUPS_LIMIT);
+        new CombinePlanNode(planNodes, null, _executorService, 0, instancePlanMakerImplV2.getNumGroupsLimit(),
+            instancePlanMakerImplV2.getInterSegmentNumGroupsLimit());
     try {
       combinePlanNode.run();
     } catch (RuntimeException e) {
@@ -117,7 +120,8 @@ public class CombinePlanNodeTest {
       });
     }
     CombinePlanNode combinePlanNode =
-        new CombinePlanNode(planNodes, null, _executorService, 0, InstancePlanMakerImplV2.DEFAULT_NUM_GROUPS_LIMIT);
+        new CombinePlanNode(planNodes, null, _executorService, 0, instancePlanMakerImplV2.getNumGroupsLimit(),
+            instancePlanMakerImplV2.getInterSegmentNumGroupsLimit());
     try {
       combinePlanNode.run();
     } catch (RuntimeException e) {

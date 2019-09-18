@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
+import org.apache.commons.lang3.EnumUtils;
 import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.exception.QueryException;
 import org.apache.pinot.common.metrics.BrokerMeter;
@@ -216,6 +217,13 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
 
     // Parse the option from request whether to preserve the type
     Map<String, String> queryOptions = brokerRequest.getQueryOptions();
+    GroupByMode groupByMode = GroupByMode.PQL;
+    if (queryOptions != null) {
+      String optionValue = queryOptions.get(QueryOptionKey.GROUP_BY_MODE);
+      if (optionValue != null && EnumUtils.isValidEnum(GroupByMode.class, optionValue.toUpperCase())) {
+        groupByMode = GroupByMode.valueOf(optionValue.toUpperCase());
+      }
+    }
     String preserveTypeString =
         (queryOptions == null) ? "false" : queryOptions.getOrDefault(QueryOptionKey.PRESERVE_TYPE, "false");
     boolean preserveType = Boolean.valueOf(preserveTypeString);
@@ -228,8 +236,7 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
               SelectionOperatorUtils.getSelectionColumns(brokerRequest.getSelections().getSelectionColumns(),
                   cachedDataSchema);
           brokerResponseNative.setSelectionResults(new SelectionResults(selectionColumns, new ArrayList<>(0)));
-        } else if (brokerRequest.isSetGroupBy() && queryOptions != null && SQL.equalsIgnoreCase(
-            queryOptions.get(QueryOptionKey.GROUP_BY_MODE)) && SQL.equalsIgnoreCase(
+        } else if (brokerRequest.isSetGroupBy() && !groupByMode.equals(GroupByMode.PQL) && SQL.equalsIgnoreCase(
             queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
           setSQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
               brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
@@ -271,15 +278,7 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
               preserveType);
         } else { // Aggregation group-by query.
 
-          boolean tableInDataTable = false;
-          if (queryOptions != null) {
-            String groupByMode = queryOptions.get(QueryOptionKey.GROUP_BY_MODE);
-            if (V1.equals(groupByMode) || V2.equals(groupByMode)) {
-              tableInDataTable = true;
-            }
-          }
-
-          if (tableInDataTable) {
+          if (!groupByMode.equals(GroupByMode.PQL)) {
 
               int resultSize = 0;
               // if RESPONSE_FORMAT is SQL, return results in {@link ResultTable}

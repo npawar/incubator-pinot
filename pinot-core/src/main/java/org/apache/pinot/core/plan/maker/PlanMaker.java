@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import org.apache.pinot.common.request.BrokerRequest;
 import org.apache.pinot.core.data.manager.SegmentDataManager;
+import org.apache.pinot.core.data.table.ConcurrentIndexedTable;
 import org.apache.pinot.core.indexsegment.IndexSegment;
 import org.apache.pinot.core.plan.Plan;
 import org.apache.pinot.core.plan.PlanNode;
@@ -35,11 +36,13 @@ public interface PlanMaker {
   /**
    * Make segment level {@link PlanNode} which contains execution plan on only one segment.
    *
+   * @param concurrentIndexedTable the indexed table to use for merging results
    * @param indexSegment index segment.
    * @param brokerRequest broker request.
    * @return segment level plan node.
    */
-  PlanNode makeInnerSegmentPlan(IndexSegment indexSegment, BrokerRequest brokerRequest);
+  PlanNode makeInnerSegmentPlan(ConcurrentIndexedTable concurrentIndexedTable, IndexSegment indexSegment,
+      BrokerRequest brokerRequest);
 
   /**
    * Make instance level {@link Plan} which contains execution plan on multiple segments.

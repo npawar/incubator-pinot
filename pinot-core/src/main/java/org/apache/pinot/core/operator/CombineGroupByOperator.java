@@ -69,7 +69,7 @@ public class CombineGroupByOperator extends BaseOperator<IntermediateResultsBloc
   private final int _interSegmentNumGroupsLimit;
 
   public CombineGroupByOperator(List<Operator> operators, BrokerRequest brokerRequest, ExecutorService executorService,
-      long timeOutMs, int innerSegmentNumGroupsLimit) {
+      long timeOutMs, int innerSegmentNumGroupsLimit, int interSegmentNumGroupsLimit) {
     Preconditions.checkArgument(brokerRequest.isSetAggregationsInfo() && brokerRequest.isSetGroupBy());
 
     _operators = operators;
@@ -77,8 +77,7 @@ public class CombineGroupByOperator extends BaseOperator<IntermediateResultsBloc
     _executorService = executorService;
     _timeOutMs = timeOutMs;
     _innerSegmentNumGroupsLimit = innerSegmentNumGroupsLimit;
-    _interSegmentNumGroupsLimit =
-        (int) Math.min((long) innerSegmentNumGroupsLimit * INTER_SEGMENT_NUM_GROUPS_LIMIT_FACTOR, Integer.MAX_VALUE);
+    _interSegmentNumGroupsLimit = interSegmentNumGroupsLimit;
   }
 
   /**

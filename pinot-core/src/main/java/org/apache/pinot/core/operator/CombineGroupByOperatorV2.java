@@ -44,17 +44,12 @@ import org.slf4j.LoggerFactory;
 
 
 /**
- * The <code>CombineGroupByOperator</code> class is the operator to combine aggregation group-by results.
+ * The <code>CombineGroupByOperatorV2</code> class is the operator to combine aggregation group-by results.
+ * It uses a {@link SimpleIndexedTable} to merge the results across all {@link Table} received from each segment level operator
  */
 public class CombineGroupByOperatorV2 extends BaseOperator<IntermediateResultsBlock> {
   private static final Logger LOGGER = LoggerFactory.getLogger(CombineGroupByOperatorV2.class);
-  private static final String OPERATOR_NAME = "CombineGroupByOperator";
-
-  // Use a higher limit for groups stored across segments. For most cases, most groups from each segment should be the
-  // same, thus the total number of groups across segments should be equal or slightly higher than the number of groups
-  // in each segment. We still put a limit across segments to protect cases where data is very skewed across different
-  // segments.
-  private static final int INTER_SEGMENT_NUM_GROUPS_LIMIT_FACTOR = 2;
+  private static final String OPERATOR_NAME = CombineGroupByOperatorV2.class.getSimpleName();
 
   private final List<Operator> _operators;
   private final BrokerRequest _brokerRequest;
@@ -64,34 +59,17 @@ public class CombineGroupByOperatorV2 extends BaseOperator<IntermediateResultsBl
   private SimpleIndexedTable _indexedTable;
 
   public CombineGroupByOperatorV2(List<Operator> operators, BrokerRequest brokerRequest,
-      int innerSegmentNumGroupsLimit) {
+      int interSegmentNumGroupsLimit) {
     Preconditions.checkArgument(brokerRequest.isSetAggregationsInfo() && brokerRequest.isSetGroupBy());
 
     _operators = operators;
     _brokerRequest = brokerRequest;
-    _interSegmentNumGroupsLimit =
-        (int) Math.min((long) innerSegmentNumGroupsLimit * INTER_SEGMENT_NUM_GROUPS_LIMIT_FACTOR, Integer.MAX_VALUE);
+    _interSegmentNumGroupsLimit = interSegmentNumGroupsLimit;
     _indexedTable = new SimpleIndexedTable();
   }
 
   /**
-   * {@inheritDoc}
-   *
-   * <p>Combines the group-by result blocks from underlying operators and returns a merged, sorted and trimmed group-by
-   * result block.
-   * <ul>
-   *   <li>
-   *     Concurrently merge group-by results form multiple result blocks into a map from group key to group results
-   *   </li>
-   *   <li>
-   *     Sort and trim the results map based on {@code TOP N} in the request
-   *     <p>Results map will be converted from {@code Map<String, Object[]>} to {@code List<Map<String, Object>>} which
-   *     is expected by the broker
-   *   </li>
-   *   <li>
-   *     Set all exceptions encountered during execution into the merged result block
-   *   </li>
-   * </ul>
+   * Merge results across all segments using a {@link SimpleIndexedTable} with capacity _interSegmentNumGroupsLimit
    */
   @Override
   protected IntermediateResultsBlock getNextBlock() {

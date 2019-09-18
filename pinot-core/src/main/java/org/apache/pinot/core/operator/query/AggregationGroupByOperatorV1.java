@@ -47,7 +47,7 @@ import org.apache.pinot.core.query.aggregation.AggregationFunctionContext;
  */
 // Each operator has its own Table
 public class AggregationGroupByOperatorV1 extends BaseAggregationGroupByOperator {
-  private static final String OPERATOR_NAME = "AggregationGroupByOperator";
+  private static final String OPERATOR_NAME = AggregationGroupByOperatorV1.class.getSimpleName();
 
   private final DataSchema _dataSchema;
 
@@ -58,7 +58,7 @@ public class AggregationGroupByOperatorV1 extends BaseAggregationGroupByOperator
   private final boolean[] _isSingleValue;
   private final boolean _hasMV;
   private final TransformExpressionTree[] _aggregationExpressions;
-  private final int _numGroupsLimit;
+  private final int _innerSegmentNumGroupsLimit;
   private final int _numColumns;
   private final int _numGroupBy;
   private final int _numAggregations;
@@ -68,15 +68,20 @@ public class AggregationGroupByOperatorV1 extends BaseAggregationGroupByOperator
   private final long _numTotalRawDocs;
   private final boolean _useStarTree;
 
+  // FIXME: using star tree
+
+  // FIXME: BYTES support end to end
+
   private ExecutionStatistics _executionStatistics;
 
   public AggregationGroupByOperatorV1(@Nonnull List<AggregationInfo> aggregationInfos,
       @Nonnull AggregationFunctionContext[] functionContexts, @Nonnull GroupBy groupBy, List<SelectionSort> orderBy,
-      int numGroupsLimit, @Nonnull TransformOperator transformOperator, long numTotalRawDocs, boolean useStarTree) {
+      int innerSegmentNumGroupsLimit, int interSegmentNumGroupsLimit, @Nonnull TransformOperator transformOperator,
+      long numTotalRawDocs, boolean useStarTree) {
     _aggregationInfos = aggregationInfos;
     _functionContexts = functionContexts;
     _orderBy = orderBy;
-    _numGroupsLimit = numGroupsLimit;
+    _innerSegmentNumGroupsLimit = innerSegmentNumGroupsLimit;
     _transformOperator = transformOperator;
     _numTotalRawDocs = numTotalRawDocs;
     _useStarTree = useStarTree;
@@ -134,7 +139,8 @@ public class AggregationGroupByOperatorV1 extends BaseAggregationGroupByOperator
   @Override
   protected IntermediateResultsBlock getNextBlock() {
     IndexedTable indexedTable = new SimpleIndexedTable();
-    indexedTable.init(_dataSchema, _aggregationInfos, _orderBy, _numGroupsLimit, false);
+    // initialize with capacity innerSegmentNumGroupsLimit
+    indexedTable.init(_dataSchema, _aggregationInfos, _orderBy, _innerSegmentNumGroupsLimit, false);
 
     int numDocsScanned = 0;
 
@@ -217,7 +223,7 @@ public class AggregationGroupByOperatorV1 extends BaseAggregationGroupByOperator
         new ExecutionStatistics(numDocsScanned, numEntriesScannedInFilter, numEntriesScannedPostFilter,
             _numTotalRawDocs);
 
-    // Build intermediate result block based on aggregation group-by result from the executor
+    // send Indexed Table as results
     return new IntermediateResultsBlock(indexedTable);
   }
 

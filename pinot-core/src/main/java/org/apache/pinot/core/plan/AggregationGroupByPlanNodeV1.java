@@ -49,7 +49,8 @@ public class AggregationGroupByPlanNodeV1 implements PlanNode {
   private static final Logger LOGGER = LoggerFactory.getLogger(AggregationGroupByPlanNodeV1.class);
 
   private final IndexSegment _indexSegment;
-  private final int _numGroupsLimit;
+  private final int _innerSegmentNumGroupsLimit;
+  private final int _interSegmentNumGroupsLimit;
   private final List<AggregationInfo> _aggregationInfos;
   private final AggregationFunctionContext[] _functionContexts;
   private final GroupBy _groupBy;
@@ -58,9 +59,10 @@ public class AggregationGroupByPlanNodeV1 implements PlanNode {
   private final StarTreeTransformPlanNode _starTreeTransformPlanNode;
 
   public AggregationGroupByPlanNodeV1(@Nonnull IndexSegment indexSegment, @Nonnull BrokerRequest brokerRequest,
-      int numGroupsLimit) {
+      int innerSegmentNumGroupsLimit, int interSegmentNumGroupsLimit) {
     _indexSegment = indexSegment;
-    _numGroupsLimit = numGroupsLimit;
+    _innerSegmentNumGroupsLimit = innerSegmentNumGroupsLimit;
+    _interSegmentNumGroupsLimit = interSegmentNumGroupsLimit;
     _aggregationInfos = brokerRequest.getAggregationsInfo();
     _functionContexts =
         AggregationFunctionUtils.getAggregationFunctionContexts(_aggregationInfos, indexSegment.getSegmentMetadata());
@@ -101,8 +103,8 @@ public class AggregationGroupByPlanNodeV1 implements PlanNode {
   public AggregationGroupByOperatorV1 run() {
     int numTotalRawDocs = _indexSegment.getSegmentMetadata().getTotalRawDocs();
 
-    return new AggregationGroupByOperatorV1(_aggregationInfos, _functionContexts, _groupBy, _orderBy, _numGroupsLimit,
-        _transformPlanNode.run(), numTotalRawDocs, false);
+    return new AggregationGroupByOperatorV1(_aggregationInfos, _functionContexts, _groupBy, _orderBy,
+        _innerSegmentNumGroupsLimit, _interSegmentNumGroupsLimit, _transformPlanNode.run(), numTotalRawDocs, false);
   }
 
   @Override

@@ -24,15 +24,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
+import org.apache.commons.lang3.EnumUtils;
 import org.apache.pinot.common.request.AggregationInfo;
 import org.apache.pinot.common.request.BrokerRequest;
 import org.apache.pinot.common.request.transform.TransformExpressionTree;
 import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.core.data.manager.SegmentDataManager;
+import org.apache.pinot.core.data.table.ConcurrentIndexedTable;
 import org.apache.pinot.core.indexsegment.IndexSegment;
 import org.apache.pinot.core.plan.AggregationGroupByPlanNode;
 import org.apache.pinot.core.plan.AggregationGroupByPlanNodeV1;
 import org.apache.pinot.core.plan.AggregationGroupByPlanNodeV2;
+import org.apache.pinot.core.plan.AggregationGroupByPlanNodeV3;
 import org.apache.pinot.core.plan.AggregationPlanNode;
 import org.apache.pinot.core.plan.CombinePlanNode;
 import org.apache.pinot.core.plan.DictionaryBasedAggregationPlanNode;
@@ -63,21 +66,41 @@ public class InstancePlanMakerImplV2 implements PlanMaker {
   public static final int DEFAULT_MAX_INITIAL_RESULT_HOLDER_CAPACITY = 10_000;
   public static final String NUM_GROUPS_LIMIT = "num.groups.limit";
   public static final int DEFAULT_NUM_GROUPS_LIMIT = 100_000;
+  // Use a higher limit for groups stored across segments. For most cases, most groups from each segment should be the
+  // same, thus the total number of groups across segments should be equal or slightly higher than the number of groups
+  // in each segment. We still put a limit across segments to protect cases where data is very skewed across different
+  // segments.
+  private static final int INTER_SEGMENT_NUM_GROUPS_LIMIT_FACTOR = 2;
 
   private final int _maxInitialResultHolderCapacity;
   // Limit on number of groups stored for each segment, beyond which no new group will be created
   private final int _numGroupsLimit;
+  private final int _interSegmentNumGroupsLimit;
 
   @VisibleForTesting
   public InstancePlanMakerImplV2() {
     _maxInitialResultHolderCapacity = DEFAULT_MAX_INITIAL_RESULT_HOLDER_CAPACITY;
     _numGroupsLimit = DEFAULT_NUM_GROUPS_LIMIT;
+    _interSegmentNumGroupsLimit =
+        (int) Math.min((long) _numGroupsLimit * INTER_SEGMENT_NUM_GROUPS_LIMIT_FACTOR, Integer.MAX_VALUE);
   }
 
   @VisibleForTesting
   public InstancePlanMakerImplV2(int maxInitialResultHolderCapacity, int numGroupsLimit) {
     _maxInitialResultHolderCapacity = maxInitialResultHolderCapacity;
     _numGroupsLimit = numGroupsLimit;
+    _interSegmentNumGroupsLimit =
+        (int) Math.min((long) _numGroupsLimit * INTER_SEGMENT_NUM_GROUPS_LIMIT_FACTOR, Integer.MAX_VALUE);
+  }
+
+  @VisibleForTesting
+  public int getNumGroupsLimit() {
+    return _numGroupsLimit;
+  }
+
+  @VisibleForTesting
+  public int getInterSegmentNumGroupsLimit() {
+    return _interSegmentNumGroupsLimit;
   }
 
   /**
@@ -96,30 +119,55 @@ public class InstancePlanMakerImplV2 implements PlanMaker {
     Preconditions.checkState(_maxInitialResultHolderCapacity <= _numGroupsLimit,
         "Invalid configuration: maxInitialResultHolderCapacity: %d must be smaller or equal to numGroupsLimit: %d",
         _maxInitialResultHolderCapacity, _numGroupsLimit);
-    LOGGER.info("Initializing plan maker with maxInitialResultHolderCapacity: {}, numGroupsLimit: {}",
-        _maxInitialResultHolderCapacity, _numGroupsLimit);
+    _interSegmentNumGroupsLimit =
+        (int) Math.min((long) _numGroupsLimit * INTER_SEGMENT_NUM_GROUPS_LIMIT_FACTOR, Integer.MAX_VALUE);
+    LOGGER.info(
+        "Initializing plan maker with maxInitialResultHolderCapacity: {}, numGroupsLimit: {}, interSegmentNumGroupsLimit: {}",
+        _maxInitialResultHolderCapacity, _numGroupsLimit, _interSegmentNumGroupsLimit);
   }
 
   @Override
-  public PlanNode makeInnerSegmentPlan(IndexSegment indexSegment, BrokerRequest brokerRequest) {
+  public PlanNode makeInnerSegmentPlan(ConcurrentIndexedTable concurrentIndexedTable, IndexSegment indexSegment,
+      BrokerRequest brokerRequest) {
     if (brokerRequest.isSetAggregationsInfo()) {
       if (brokerRequest.isSetGroupBy()) {
         // go to the various AggregationGroupBy implementations based on GROUP_BY_MODE
         Map<String, String> queryOptions = brokerRequest.getQueryOptions();
+        GroupByMode groupByMode = GroupByMode.PQL;
         if (queryOptions != null) {
-          String groupByMode = queryOptions.get(GROUP_BY_MODE);
-          if (V1.equals(groupByMode)) {
-            return new AggregationGroupByPlanNodeV1(indexSegment, brokerRequest, _numGroupsLimit);
-          } else if (V2.equals(groupByMode)) {
-            return new AggregationGroupByPlanNodeV2(indexSegment, brokerRequest, _numGroupsLimit);
+          String groupByModeValue = queryOptions.get(QueryOptionKey.GROUP_BY_MODE);
+          if (groupByModeValue != null && EnumUtils.isValidEnum(GroupByMode.class, groupByModeValue.toUpperCase())) {
+            groupByMode = GroupByMode.valueOf(groupByModeValue.toUpperCase());
           }
-          // V2
-          // V3
-          // etc
         }
-        // default
-        return new AggregationGroupByPlanNode(indexSegment, brokerRequest, _maxInitialResultHolderCapacity,
-            _numGroupsLimit);
+        switch (groupByMode) {
+          case V1:
+            // V1 - Simple in AggregationGroupByOperator, Concurrent in CombineGroupByOperator
+            return new AggregationGroupByPlanNodeV1(indexSegment, brokerRequest, _numGroupsLimit,
+                _interSegmentNumGroupsLimit);
+          case V2:
+            // V2 - Simple in AggregationGroupByOperator, Simple in CombineGroupByOperator
+            return new AggregationGroupByPlanNodeV2(indexSegment, brokerRequest, _numGroupsLimit,
+                _interSegmentNumGroupsLimit);
+          case V3:
+            // V3 - One Concurrent across everything
+            return new AggregationGroupByPlanNodeV3(concurrentIndexedTable, indexSegment, brokerRequest,
+                _numGroupsLimit, _interSegmentNumGroupsLimit);
+          case V4:
+            // V4 - One Concurrent across everything, but inside AggregationGroupByOperator, use Simple/existing approach, then copy over
+
+          case V5:
+            // V5 - One Concurrent across everything, use local dictionary
+
+          case V6:
+            // other special cases?
+
+          case PQL:
+          default:
+            // default. Even V0 goes here
+            return new AggregationGroupByPlanNode(indexSegment, brokerRequest, _maxInitialResultHolderCapacity,
+                _numGroupsLimit);
+        }
       } else {
         if (isFitForMetadataBasedPlan(brokerRequest, indexSegment)) {
           return new MetadataBasedAggregationPlanNode(indexSegment, brokerRequest.getAggregationsInfo());
@@ -146,12 +194,16 @@ public class InstancePlanMakerImplV2 implements PlanMaker {
     }
     BrokerRequestPreProcessor.preProcess(indexSegments, brokerRequest);
 
+    // FIXME: create this table only for the modes which need it.
+    // TODO: currently mode comes from queryOptions. Eventually, decide on the fly
+    ConcurrentIndexedTable concurrentIndexedTable = new ConcurrentIndexedTable();
     List<PlanNode> planNodes = new ArrayList<>();
     for (IndexSegment indexSegment : indexSegments) {
-      planNodes.add(makeInnerSegmentPlan(indexSegment, brokerRequest));
+      planNodes.add(makeInnerSegmentPlan(concurrentIndexedTable, indexSegment, brokerRequest));
     }
     CombinePlanNode combinePlanNode =
-        new CombinePlanNode(planNodes, brokerRequest, executorService, timeOutMs, _numGroupsLimit);
+        new CombinePlanNode(planNodes, brokerRequest, executorService, timeOutMs, _numGroupsLimit,
+            _interSegmentNumGroupsLimit);
 
     return new GlobalPlanImplV0(new InstanceResponsePlanNode(combinePlanNode));
   }

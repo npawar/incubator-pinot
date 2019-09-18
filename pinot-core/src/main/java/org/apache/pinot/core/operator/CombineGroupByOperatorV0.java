@@ -28,7 +28,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
@@ -50,20 +49,12 @@ import org.slf4j.LoggerFactory;
 
 
 /**
- * The <code>CombineGroupByOrderByOperator</code> class is the operator to combine aggregation results with group-by and order by.
+ * The <code>CombineGroupByOperatorV0</code> class is the operator to combine aggregation results with group-by.
+ * It uses a {@link ConcurrentIndexedTable} to merge the results from all segment level operators
  */
-// TODO: this class has a lot of duplication with {@link CombineGroupByOperator}.
-// These 2 classes can be combined into one
-// For the first iteration of Order By support, these will be separate
-public class CombineGroupByOrderByOperator extends BaseOperator<IntermediateResultsBlock> {
-  private static final Logger LOGGER = LoggerFactory.getLogger(CombineGroupByOrderByOperator.class);
-  private static final String OPERATOR_NAME = "CombineGroupByOrderByOperator";
-
-  // Use a higher limit for groups stored across segments. For most cases, most groups from each segment should be the
-  // same, thus the total number of groups across segments should be equal or slightly higher than the number of groups
-  // in each segment. We still put a limit across segments to protect cases where data is very skewed across different
-  // segments.
-  private static final int INTER_SEGMENT_NUM_GROUPS_LIMIT_FACTOR = 2;
+public class CombineGroupByOperatorV0 extends BaseOperator<IntermediateResultsBlock> {
+  private static final Logger LOGGER = LoggerFactory.getLogger(CombineGroupByOperatorV0.class);
+  private static final String OPERATOR_NAME = CombineGroupByOperatorV0.class.getSimpleName();
 
   private final List<Operator> _operators;
   private final BrokerRequest _brokerRequest;
@@ -74,16 +65,15 @@ public class CombineGroupByOrderByOperator extends BaseOperator<IntermediateResu
   private DataSchema _dataSchema;
   private ConcurrentIndexedTable _indexedTable;
 
-  public CombineGroupByOrderByOperator(List<Operator> operators, BrokerRequest brokerRequest,
-      ExecutorService executorService, long timeOutMs, int innerSegmentNumGroupsLimit) {
+  public CombineGroupByOperatorV0(List<Operator> operators, BrokerRequest brokerRequest,
+      ExecutorService executorService, long timeOutMs, int interSegmentNumGroupsLimit) {
     Preconditions.checkArgument(brokerRequest.isSetAggregationsInfo() && brokerRequest.isSetGroupBy());
 
     _operators = operators;
     _brokerRequest = brokerRequest;
     _executorService = executorService;
     _timeOutMs = timeOutMs;
-    _interSegmentNumGroupsLimit =
-        (int) Math.min((long) innerSegmentNumGroupsLimit * INTER_SEGMENT_NUM_GROUPS_LIMIT_FACTOR, Integer.MAX_VALUE);
+    _interSegmentNumGroupsLimit = interSegmentNumGroupsLimit;
     _initLock = new ReentrantLock();
     _indexedTable = new ConcurrentIndexedTable();
   }

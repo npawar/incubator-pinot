@@ -30,10 +30,9 @@ import org.apache.pinot.common.request.SelectionSort;
 import org.apache.pinot.common.request.transform.TransformExpressionTree;
 import org.apache.pinot.common.utils.DataSchema;
 import org.apache.pinot.core.common.BlockValSet;
-import org.apache.pinot.core.data.table.IndexedTable;
+import org.apache.pinot.core.data.table.ConcurrentIndexedTable;
 import org.apache.pinot.core.data.table.Key;
 import org.apache.pinot.core.data.table.Record;
-import org.apache.pinot.core.data.table.SimpleIndexedTable;
 import org.apache.pinot.core.operator.ExecutionStatistics;
 import org.apache.pinot.core.operator.blocks.IntermediateResultsBlock;
 import org.apache.pinot.core.operator.blocks.TransformBlock;
@@ -46,10 +45,11 @@ import org.apache.pinot.core.query.aggregation.AggregationFunctionContext;
  * The <code>AggregationOperator</code> class provides the operator for aggregation group-by query on a single segment.
  */
 // Each operator has its own Table
-public class AggregationGroupByOperatorV2 extends BaseAggregationGroupByOperator {
-  private static final String OPERATOR_NAME = AggregationGroupByOperatorV2.class.getSimpleName();
+public class AggregationGroupByOperatorV3 extends BaseAggregationGroupByOperator {
+  private static final String OPERATOR_NAME = AggregationGroupByOperatorV3.class.getSimpleName();
 
   private final DataSchema _dataSchema;
+  private final ConcurrentIndexedTable _concurrentIndexedTable;
 
   private final List<AggregationInfo> _aggregationInfos;
   private final AggregationFunctionContext[] _functionContexts;
@@ -58,7 +58,7 @@ public class AggregationGroupByOperatorV2 extends BaseAggregationGroupByOperator
   private final boolean[] _isSingleValue;
   private final boolean _hasMV;
   private final TransformExpressionTree[] _aggregationExpressions;
-  private final int _innerSegmentNumGroupsLimit;
+  private final int _interSegmentNumGroupsLimit;
   private final int _numColumns;
   private final int _numGroupBy;
   private final int _numAggregations;
@@ -70,17 +70,18 @@ public class AggregationGroupByOperatorV2 extends BaseAggregationGroupByOperator
 
   private ExecutionStatistics _executionStatistics;
 
-  public AggregationGroupByOperatorV2(@Nonnull List<AggregationInfo> aggregationInfos,
-      @Nonnull AggregationFunctionContext[] functionContexts, @Nonnull GroupBy groupBy, List<SelectionSort> orderBy,
-      int innerSegmentNumGroupsLimit, int interSegmentNumGroupsLimit, @Nonnull TransformOperator transformOperator,
-      long numTotalRawDocs, boolean useStarTree) {
+  public AggregationGroupByOperatorV3(@Nonnull ConcurrentIndexedTable concurrentIndexedTable,
+      @Nonnull List<AggregationInfo> aggregationInfos, @Nonnull AggregationFunctionContext[] functionContexts,
+      @Nonnull GroupBy groupBy, List<SelectionSort> orderBy, int innerSegmentNumGroupsLimit, int interSegmentNumGroupsLimit,
+      @Nonnull TransformOperator transformOperator, long numTotalRawDocs, boolean useStarTree) {
     _aggregationInfos = aggregationInfos;
     _functionContexts = functionContexts;
     _orderBy = orderBy;
-    _innerSegmentNumGroupsLimit = innerSegmentNumGroupsLimit;
+    _interSegmentNumGroupsLimit = interSegmentNumGroupsLimit;
     _transformOperator = transformOperator;
     _numTotalRawDocs = numTotalRawDocs;
     _useStarTree = useStarTree;
+    _concurrentIndexedTable = concurrentIndexedTable;
 
     _numGroupBy = groupBy.getExpressionsSize();
     _numAggregations = _functionContexts.length;
@@ -134,9 +135,9 @@ public class AggregationGroupByOperatorV2 extends BaseAggregationGroupByOperator
 
   @Override
   protected IntermediateResultsBlock getNextBlock() {
-    IndexedTable indexedTable = new SimpleIndexedTable();
-    // initialize with capacity innerSegmentNumGroupsLimit
-    indexedTable.init(_dataSchema, _aggregationInfos, _orderBy, _innerSegmentNumGroupsLimit, false);
+    // internally, {@link ConcurrentIndexedTable::init} will ensure that init happens only once on the Table
+    // init with interSegmentLimit instead of inner, as Combine Operator is almost no-op
+    _concurrentIndexedTable.init(_dataSchema, _aggregationInfos, _orderBy, _interSegmentNumGroupsLimit, false);
 
     int numDocsScanned = 0;
 
@@ -150,7 +151,7 @@ public class AggregationGroupByOperatorV2 extends BaseAggregationGroupByOperator
       int index = 0;
       for (int i = 0; i < _numGroupBy; i++) {
         BlockValSet blockValueSet = transformBlock.getBlockValueSet(_groupByExpressions[i]);
-        DataSchema.ColumnDataType columnDataType = DataSchema.ColumnDataType.fromDataType(blockValueSet.getValueType(), true);
+        DataSchema.ColumnDataType columnDataType = _columnDataTypes[index];
         if (_isSingleValue[i]) {
           valuesList[index] = getValuesSV(blockValueSet, numDocs, columnDataType);
         } else {
@@ -164,7 +165,7 @@ public class AggregationGroupByOperatorV2 extends BaseAggregationGroupByOperator
           valuesList[index] = getCountValues(numDocs);
         } else {
           BlockValSet blockValueSet = transformBlock.getBlockValueSet(_aggregationExpressions[i]);
-          DataSchema.ColumnDataType columnDataType = DataSchema.ColumnDataType.fromDataType(blockValueSet.getValueType(), true);
+          DataSchema.ColumnDataType columnDataType = _columnDataTypes[index];
           valuesList[index] = getValuesSV(blockValueSet, numDocs, columnDataType);
         }
         index++;
@@ -195,7 +196,7 @@ public class AggregationGroupByOperatorV2 extends BaseAggregationGroupByOperator
           List<Object[]> cartesianProduct = cartesianProduct(sets);
           for (Object[] combination : cartesianProduct) {
             Record record = new Record(new Key(combination), aggregationValues.clone());
-            indexedTable.upsert(record);
+            _concurrentIndexedTable.upsert(record);
           }
         } else {
           index = 0;
@@ -206,10 +207,11 @@ public class AggregationGroupByOperatorV2 extends BaseAggregationGroupByOperator
             aggregationValues[aggregationIndex] = valuesList[index++][docId];
           }
           Record record = new Record(new Key(groupByValues), aggregationValues);
-          indexedTable.upsert(record);
+          _concurrentIndexedTable.upsert(record);
         }
       }
     }
+
 
     // Gather execution statistics
     long numEntriesScannedInFilter = _transformOperator.getExecutionStatistics().getNumEntriesScannedInFilter();
@@ -219,7 +221,7 @@ public class AggregationGroupByOperatorV2 extends BaseAggregationGroupByOperator
             _numTotalRawDocs);
 
     // send Indexed Table as results
-    return new IntermediateResultsBlock(indexedTable);
+    return new IntermediateResultsBlock(_concurrentIndexedTable);
   }
 
   @Override

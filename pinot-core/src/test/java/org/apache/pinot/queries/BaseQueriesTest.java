@@ -29,6 +29,7 @@ import org.apache.pinot.common.response.broker.BrokerResponseNative;
 import org.apache.pinot.common.utils.DataTable;
 import org.apache.pinot.core.common.Operator;
 import org.apache.pinot.core.data.manager.SegmentDataManager;
+import org.apache.pinot.core.data.table.ConcurrentIndexedTable;
 import org.apache.pinot.core.indexsegment.IndexSegment;
 import org.apache.pinot.core.plan.Plan;
 import org.apache.pinot.core.plan.maker.InstancePlanMakerImplV2;
@@ -44,6 +45,7 @@ public abstract class BaseQueriesTest {
   private static final Pql2Compiler COMPILER = new Pql2Compiler();
   private static final PlanMaker PLAN_MAKER = new InstancePlanMakerImplV2();
   private static final ExecutorService EXECUTOR_SERVICE = Executors.newFixedThreadPool(2);
+  private final ConcurrentIndexedTable _concurrentIndexedTable = new ConcurrentIndexedTable();
 
   protected abstract String getFilter();
 
@@ -60,7 +62,8 @@ public abstract class BaseQueriesTest {
    */
   @SuppressWarnings("unchecked")
   protected <T extends Operator> T getOperatorForQuery(String query) {
-    return (T) PLAN_MAKER.makeInnerSegmentPlan(getIndexSegment(), COMPILER.compileToBrokerRequest(query)).run();
+    return (T) PLAN_MAKER.makeInnerSegmentPlan(_concurrentIndexedTable, getIndexSegment(),
+        COMPILER.compileToBrokerRequest(query)).run();
   }
 
   /**

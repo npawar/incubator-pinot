@@ -29,8 +29,9 @@ import org.apache.pinot.common.request.SelectionSort;
 import org.apache.pinot.common.request.transform.TransformExpressionTree;
 import org.apache.pinot.common.utils.request.FilterQueryTree;
 import org.apache.pinot.common.utils.request.RequestUtils;
+import org.apache.pinot.core.data.table.ConcurrentIndexedTable;
 import org.apache.pinot.core.indexsegment.IndexSegment;
-import org.apache.pinot.core.operator.query.AggregationGroupByOperatorV2;
+import org.apache.pinot.core.operator.query.AggregationGroupByOperatorV3;
 import org.apache.pinot.core.query.aggregation.AggregationFunctionContext;
 import org.apache.pinot.core.query.aggregation.function.AggregationFunctionUtils;
 import org.apache.pinot.core.startree.StarTreeUtils;
@@ -45,8 +46,8 @@ import org.slf4j.LoggerFactory;
  * The <code>AggregationGroupByPlanNode</code> class provides the execution plan for aggregation group-by query on a
  * single segment.
  */
-public class AggregationGroupByPlanNodeV2 implements PlanNode {
-  private static final Logger LOGGER = LoggerFactory.getLogger(AggregationGroupByPlanNodeV2.class);
+public class AggregationGroupByPlanNodeV3 implements PlanNode {
+  private static final Logger LOGGER = LoggerFactory.getLogger(AggregationGroupByPlanNodeV3.class);
 
   private final IndexSegment _indexSegment;
   private final int _innerSegmentNumGroupsLimit;
@@ -57,9 +58,11 @@ public class AggregationGroupByPlanNodeV2 implements PlanNode {
   private final List<SelectionSort> _orderBy;
   private final TransformPlanNode _transformPlanNode;
   private final StarTreeTransformPlanNode _starTreeTransformPlanNode;
+  private final ConcurrentIndexedTable _concurrentIndexedTable;
 
-  public AggregationGroupByPlanNodeV2(@Nonnull IndexSegment indexSegment, @Nonnull BrokerRequest brokerRequest,
-      int innerSegmentNumGroupsLimit, int interSegmentNumGroupsLimit) {
+  public AggregationGroupByPlanNodeV3(@Nonnull ConcurrentIndexedTable concurrentIndexedTable,
+      @Nonnull IndexSegment indexSegment, @Nonnull BrokerRequest brokerRequest, int innerSegmentNumGroupsLimit,
+      int interSegmentNumGroupsLimit) {
     _indexSegment = indexSegment;
     _innerSegmentNumGroupsLimit = innerSegmentNumGroupsLimit;
     _interSegmentNumGroupsLimit = interSegmentNumGroupsLimit;
@@ -68,6 +71,7 @@ public class AggregationGroupByPlanNodeV2 implements PlanNode {
         AggregationFunctionUtils.getAggregationFunctionContexts(_aggregationInfos, indexSegment.getSegmentMetadata());
     _groupBy = brokerRequest.getGroupBy();
     _orderBy = brokerRequest.getOrderBy();
+    _concurrentIndexedTable = concurrentIndexedTable;
 
     List<StarTreeV2> starTrees = indexSegment.getStarTrees();
     if (starTrees != null) {
@@ -100,11 +104,12 @@ public class AggregationGroupByPlanNodeV2 implements PlanNode {
   }
 
   @Override
-  public AggregationGroupByOperatorV2 run() {
+  public AggregationGroupByOperatorV3 run() {
     int numTotalRawDocs = _indexSegment.getSegmentMetadata().getTotalRawDocs();
 
-    return new AggregationGroupByOperatorV2(_aggregationInfos, _functionContexts, _groupBy, _orderBy,
-        _innerSegmentNumGroupsLimit, _interSegmentNumGroupsLimit, _transformPlanNode.run(), numTotalRawDocs, false);
+    return new AggregationGroupByOperatorV3(_concurrentIndexedTable, _aggregationInfos, _functionContexts, _groupBy,
+        _orderBy, _innerSegmentNumGroupsLimit, _interSegmentNumGroupsLimit, _transformPlanNode.run(), numTotalRawDocs,
+        false);
   }
 
   @Override

@@ -24,13 +24,14 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.apache.commons.lang3.EnumUtils;
 import org.apache.pinot.common.request.BrokerRequest;
-import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.core.common.Operator;
 import org.apache.pinot.core.operator.CombineGroupByOperator;
+import org.apache.pinot.core.operator.CombineGroupByOperatorV0;
 import org.apache.pinot.core.operator.CombineGroupByOperatorV1;
 import org.apache.pinot.core.operator.CombineGroupByOperatorV2;
-import org.apache.pinot.core.operator.CombineGroupByOrderByOperator;
+import org.apache.pinot.core.operator.CombineGroupByOperatorV3;
 import org.apache.pinot.core.operator.CombineOperator;
 import org.apache.pinot.core.query.exception.BadQueryRequestException;
 import org.apache.pinot.core.util.trace.TraceCallable;
@@ -59,7 +60,8 @@ public class CombinePlanNode implements PlanNode {
   private final BrokerRequest _brokerRequest;
   private final ExecutorService _executorService;
   private final long _timeOutMs;
-  private final int _numGroupsLimit;
+  private final int _innerSegmentNumGroupsLimit;
+  private final int _interSegmentNumGroupsLimit;
 
   /**
    * Constructor for the class.
@@ -68,15 +70,17 @@ public class CombinePlanNode implements PlanNode {
    * @param brokerRequest Broker request
    * @param executorService Executor service
    * @param timeOutMs Time out in milliseconds for query execution (not for planning phase)
-   * @param numGroupsLimit Limit of number of groups stored in each segment
+   * @param innerSegmentNumGroupsLimit Limit of number of groups stored in each segment
+   * @param interSegmentNumGroupsLimit Limit of number of groups stored across all segments of the server
    */
   public CombinePlanNode(List<PlanNode> planNodes, BrokerRequest brokerRequest, ExecutorService executorService,
-      long timeOutMs, int numGroupsLimit) {
+      long timeOutMs, int innerSegmentNumGroupsLimit, int interSegmentNumGroupsLimit) {
     _planNodes = planNodes;
     _brokerRequest = brokerRequest;
     _executorService = executorService;
     _timeOutMs = timeOutMs;
-    _numGroupsLimit = numGroupsLimit;
+    _innerSegmentNumGroupsLimit = innerSegmentNumGroupsLimit;
+    _interSegmentNumGroupsLimit = interSegmentNumGroupsLimit;
   }
 
   @Override
@@ -107,8 +111,7 @@ public class CombinePlanNode implements PlanNode {
         final int index = i;
         futures[i] = _executorService.submit(new TraceCallable<List<Operator>>() {
           @Override
-          public List<Operator> callJob()
-              throws Exception {
+          public List<Operator> callJob() throws Exception {
             List<Operator> operators = new ArrayList<>();
             int start = index * opsPerThread;
             int limit = Math.min(opsPerThread, numPlanNodes - start);
@@ -149,17 +152,42 @@ public class CombinePlanNode implements PlanNode {
     if (_brokerRequest.isSetAggregationsInfo() && _brokerRequest.getGroupBy() != null) {
       // Aggregation group-by query
       Map<String, String> queryOptions = _brokerRequest.getQueryOptions();
+      GroupByMode groupByMode = GroupByMode.PQL;
       if (queryOptions != null) {
-        String groupByMode = queryOptions.get(QueryOptionKey.GROUP_BY_MODE);
-        if (V1.equalsIgnoreCase(groupByMode)) {
-          return new CombineGroupByOperatorV1(operators, _brokerRequest, _executorService, _timeOutMs, _numGroupsLimit);
-        } else if (V2.equalsIgnoreCase(groupByMode)) {
-          return new CombineGroupByOperatorV2(operators, _brokerRequest, _numGroupsLimit);
+        String groupByModeValue = queryOptions.get(QueryOptionKey.GROUP_BY_MODE);
+        if (groupByModeValue != null && EnumUtils.isValidEnum(GroupByMode.class, groupByModeValue.toUpperCase())) {
+          groupByMode = GroupByMode.valueOf(groupByModeValue.toUpperCase());
         }
-        // V2, V3 etc for various implementations
       }
-      // default
-      return new CombineGroupByOperator(operators, _brokerRequest, _executorService, _timeOutMs, _numGroupsLimit);
+      switch (groupByMode) {
+
+        case V0:
+          // V0 - AggregationGroupByOperator untouched. Concurrent inside CombineGroupByOperator
+          return new CombineGroupByOperatorV0(operators, _brokerRequest, _executorService, _timeOutMs,
+              _interSegmentNumGroupsLimit);
+        case V1:
+          // V1 - Simple inside AggregationGroupByOperator, Concurrent inside CombineGroupByOperator
+          return new CombineGroupByOperatorV1(operators, _brokerRequest, _executorService, _timeOutMs,
+              _interSegmentNumGroupsLimit);
+        case V2:
+          // V2 - Simple in AggregationGroupByOperator, Simple in CombineGroupByOperator
+          return new CombineGroupByOperatorV2(operators, _brokerRequest, _interSegmentNumGroupsLimit);
+        case V3:
+          // V3 - One Concurrent across everything
+          return new CombineGroupByOperatorV3(operators, _brokerRequest, _executorService, _timeOutMs,
+              _interSegmentNumGroupsLimit);
+        case V4:
+          // V4 - One Concurrent across everything, but inside AggregationGroupByOperator, use Simple/existing approach, then copy over
+        case V5:
+          // V5 - One Concurrent across everything, use local dictionary
+        case V6:
+          // other special cases?
+        case PQL:
+        default:
+          return new CombineGroupByOperator(operators, _brokerRequest, _executorService, _timeOutMs,
+              _innerSegmentNumGroupsLimit, _interSegmentNumGroupsLimit);
+
+      }
     } else {
       // Selection or aggregation only query
       return new CombineOperator(operators, _executorService, _timeOutMs, _brokerRequest);

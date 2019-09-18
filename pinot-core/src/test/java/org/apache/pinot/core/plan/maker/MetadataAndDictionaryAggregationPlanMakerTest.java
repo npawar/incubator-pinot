@@ -31,6 +31,7 @@ import org.apache.pinot.common.data.Schema;
 import org.apache.pinot.common.data.StarTreeIndexSpec;
 import org.apache.pinot.common.request.BrokerRequest;
 import org.apache.pinot.common.segment.ReadMode;
+import org.apache.pinot.core.data.table.ConcurrentIndexedTable;
 import org.apache.pinot.core.indexsegment.IndexSegment;
 import org.apache.pinot.core.indexsegment.generator.SegmentGeneratorConfig;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegmentLoader;
@@ -164,11 +165,12 @@ public class MetadataAndDictionaryAggregationPlanMakerTest {
   public void testInstancePlanMakerForMetadataAndDictionaryPlan(String query, Class<? extends PlanNode> planNodeClass,
       Class<? extends PlanNode> starTreePlanNodeClass) {
 
+    ConcurrentIndexedTable concurrentIndexedTable = new ConcurrentIndexedTable();
     BrokerRequest brokerRequest = COMPILER.compileToBrokerRequest(query);
-    PlanNode plan = PLAN_MAKER.makeInnerSegmentPlan(_indexSegment, brokerRequest);
+    PlanNode plan = PLAN_MAKER.makeInnerSegmentPlan(concurrentIndexedTable, _indexSegment, brokerRequest);
     Assert.assertTrue(planNodeClass.isInstance(plan));
 
-    plan = PLAN_MAKER.makeInnerSegmentPlan(_starTreeIndexSegment, brokerRequest);
+    plan = PLAN_MAKER.makeInnerSegmentPlan(concurrentIndexedTable, _starTreeIndexSegment, brokerRequest);
     Assert.assertTrue(starTreePlanNodeClass.isInstance(plan));
   }
 

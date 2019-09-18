@@ -47,6 +47,7 @@ public class ConcurrentIndexedTable extends IndexedTable {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ConcurrentIndexedTable.class);
 
+  private AtomicBoolean _init = new AtomicBoolean();
   private ConcurrentMap<Key, Record> _lookupMap;
   private ReentrantReadWriteLock _readWriteLock;
 
@@ -60,6 +61,9 @@ public class ConcurrentIndexedTable extends IndexedTable {
 
   /**
    * Initializes the data structures and comparators needed for this Table
+   * Multiple threads should not access at the same time
+   * In a multi threaded environment, this init should happen only once across all threads
+   *
    * @param dataSchema data schema of the record's keys and values
    * @param aggregationInfos aggregation infors for the aggregations in record'd values
    * @param orderBy list of {@link SelectionSort} defining the order by
@@ -67,17 +71,20 @@ public class ConcurrentIndexedTable extends IndexedTable {
    * @param sort does final result need to be sorted
    */
   @Override
-  public void init(@Nonnull DataSchema dataSchema, List<AggregationInfo> aggregationInfos, List<SelectionSort> orderBy,
-      int maxCapacity, boolean sort) {
-    super.init(dataSchema, aggregationInfos, orderBy, maxCapacity, sort);
+  public synchronized void init(@Nonnull DataSchema dataSchema, List<AggregationInfo> aggregationInfos,
+      List<SelectionSort> orderBy, int maxCapacity, boolean sort) {
+    if (!_init.get()) {
+      super.init(dataSchema, aggregationInfos, orderBy, maxCapacity, sort);
 
-    _lookupMap = new ConcurrentHashMap<>();
-    _readWriteLock = new ReentrantReadWriteLock();
+      _lookupMap = new ConcurrentHashMap<>();
+      _readWriteLock = new ReentrantReadWriteLock();
 
-    _isOrderBy = CollectionUtils.isNotEmpty(orderBy);
-    if (_isOrderBy) {
-      _minHeapComparator = OrderByUtils.getKeysAndValuesComparator(dataSchema, orderBy, aggregationInfos).reversed();
-      _orderByComparator = OrderByUtils.getKeysAndValuesComparator(dataSchema, orderBy, aggregationInfos);
+      _isOrderBy = CollectionUtils.isNotEmpty(orderBy);
+      if (_isOrderBy) {
+        _minHeapComparator = OrderByUtils.getKeysAndValuesComparator(dataSchema, orderBy, aggregationInfos).reversed();
+        _orderByComparator = OrderByUtils.getKeysAndValuesComparator(dataSchema, orderBy, aggregationInfos);
+      }
+      _init.set(true);
     }
   }
 
@@ -206,7 +213,7 @@ public class ConcurrentIndexedTable extends IndexedTable {
     long numResizes = _numResizes.sum();
     long resizeTime = _resizeTime.get();
     LOGGER.info("Num resizes : {}, Total time spent in resizing : {}, Avg resize time : {}", numResizes, resizeTime,
-        resizeTime / numResizes);
+        numResizes == 0 ? 0 : resizeTime / numResizes);
   }
 
   @Override

@@ -82,4 +82,18 @@ public class PercentileTDigestMVAggregationFunction extends PercentileTDigestAgg
       }
     }
   }
+
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    double[][] doubleValues = blockValueSet.getDoubleValuesMV();
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      TDigest tDigest = TDigest.createMergingDigest(DEFAULT_TDIGEST_COMPRESSION);
+      for (double value : doubleValues[i]) {
+        tDigest.add(value);
+      }
+      values[i] = tDigest;
+    }
+    return values;
+  }
 }

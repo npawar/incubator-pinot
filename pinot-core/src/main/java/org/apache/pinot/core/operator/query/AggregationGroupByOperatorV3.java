@@ -39,6 +39,7 @@ import org.apache.pinot.core.operator.blocks.TransformBlock;
 import org.apache.pinot.core.operator.transform.TransformOperator;
 import org.apache.pinot.core.operator.transform.TransformResultMetadata;
 import org.apache.pinot.core.query.aggregation.AggregationFunctionContext;
+import org.apache.pinot.core.query.aggregation.function.AggregationFunction;
 
 
 /**
@@ -161,12 +162,12 @@ public class AggregationGroupByOperatorV3 extends BaseAggregationGroupByOperator
       }
 
       for (int i = 0; i < _numAggregations; i++) {
-        if (_functionContexts[i].getAggregationFunction().getType() == AggregationFunctionType.COUNT) {
-          valuesList[index] = getCountValues(numDocs);
+        AggregationFunction aggregationFunction = _functionContexts[i].getAggregationFunction();
+        if (aggregationFunction.getType() == AggregationFunctionType.COUNT) {
+          valuesList[index] = aggregationFunction.getValuesFromBlock(null, numDocs);
         } else {
           BlockValSet blockValueSet = transformBlock.getBlockValueSet(_aggregationExpressions[i]);
-          DataSchema.ColumnDataType columnDataType = _columnDataTypes[index];
-          valuesList[index] = getValuesSV(blockValueSet, numDocs, columnDataType);
+          valuesList[index] = aggregationFunction.getValuesFromBlock(blockValueSet, numDocs);
         }
         index++;
       }

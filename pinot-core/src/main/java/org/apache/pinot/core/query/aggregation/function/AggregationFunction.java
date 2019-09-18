@@ -77,6 +77,11 @@ public interface AggregationFunction<IntermediateResult, FinalResult extends Com
       @Nonnull BlockValSet... blockValSets);
 
   /**
+   * Extracts values for aggregation from block value set and returns as an Object array
+   */
+  Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs);
+
+  /**
    * Perform group-by on the given group keys array and projection block value sets.
    * <p>This method is for multi-value group by columns case, where each docId can have multiple group keys.
    */

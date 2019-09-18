@@ -221,6 +221,68 @@ public class DistinctCountHLLAggregationFunction implements AggregationFunction<
     }
   }
 
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    Object[] values = new Object[numDocs];
+    FieldSpec.DataType valueType = blockValueSet.getValueType();
+    switch (valueType) {
+      case INT:
+        int[] intValues = blockValueSet.getIntValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          HyperLogLog hyperLogLog = new HyperLogLog(DEFAULT_LOG2M);
+          hyperLogLog.offer(intValues[i]);
+          values[i] = hyperLogLog;
+        }
+        break;
+      case LONG:
+        long[] longValues = blockValueSet.getLongValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          HyperLogLog hyperLogLog = new HyperLogLog(DEFAULT_LOG2M);
+          hyperLogLog.offer(longValues[i]);
+          values[i] = hyperLogLog;
+        }
+        break;
+      case FLOAT:
+        float[] floatValues = blockValueSet.getFloatValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          HyperLogLog hyperLogLog = new HyperLogLog(DEFAULT_LOG2M);
+          hyperLogLog.offer(floatValues[i]);
+          values[i] = hyperLogLog;
+        }
+        break;
+      case DOUBLE:
+        double[] doubleValues = blockValueSet.getDoubleValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          HyperLogLog hyperLogLog = new HyperLogLog(DEFAULT_LOG2M);
+          hyperLogLog.offer(doubleValues[i]);
+          values[i] = hyperLogLog;
+        }
+        break;
+      case STRING:
+        String[] stringValues = blockValueSet.getStringValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          HyperLogLog hyperLogLog = new HyperLogLog(DEFAULT_LOG2M);
+          hyperLogLog.offer(stringValues[i]);
+          values[i] = hyperLogLog;
+        }
+        break;
+      case BYTES:
+        // Serialized HyperLogLog
+        byte[][] bytesValues = blockValueSet.getBytesValuesSV();
+        try {
+          for (int i = 0; i < numDocs; i++) {
+            values[i] = ObjectSerDeUtils.HYPER_LOG_LOG_SER_DE.deserialize(bytesValues[i]);
+          }
+        } catch (Exception e) {
+          throw new RuntimeException("Caught exception while aggregating HyperLogLog", e);
+        }
+        break;
+      default:
+        throw new IllegalStateException("Illegal data type for DISTINCT_COUNT_HLL aggregation function: " + valueType);
+    }
+    return values;
+  }
+
   @Nonnull
   @Override
   public HyperLogLog extractAggregationResult(@Nonnull AggregationResultHolder aggregationResultHolder) {

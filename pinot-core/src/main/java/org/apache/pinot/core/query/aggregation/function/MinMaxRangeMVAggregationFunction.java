@@ -22,6 +22,7 @@ import javax.annotation.Nonnull;
 import org.apache.pinot.common.function.AggregationFunctionType;
 import org.apache.pinot.core.common.BlockValSet;
 import org.apache.pinot.core.query.aggregation.AggregationResultHolder;
+import org.apache.pinot.core.query.aggregation.function.customobject.MinMaxRangePair;
 import org.apache.pinot.core.query.aggregation.groupby.GroupByResultHolder;
 
 
@@ -78,6 +79,26 @@ public class MinMaxRangeMVAggregationFunction extends MinMaxRangeAggregationFunc
         aggregateOnGroupKey(groupKey, groupByResultHolder, values);
       }
     }
+  }
+
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    double[][] doubleValues = blockValueSet.getDoubleValuesMV();
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      double min = Double.POSITIVE_INFINITY;
+      double max = Double.NEGATIVE_INFINITY;
+      for (double value : doubleValues[i]) {
+        if (value < min) {
+          min = value;
+        }
+        if (value > max) {
+          max = value;
+        }
+      }
+      values[i] = new MinMaxRangePair(min, max);
+    }
+    return values;
   }
 
   private void aggregateOnGroupKey(int groupKey, @Nonnull GroupByResultHolder groupByResultHolder, double[] values) {

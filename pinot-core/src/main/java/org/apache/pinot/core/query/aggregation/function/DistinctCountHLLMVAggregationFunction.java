@@ -217,4 +217,66 @@ public class DistinctCountHLLMVAggregationFunction extends DistinctCountHLLAggre
             "Illegal data type for DISTINCT_COUNT_HLL_MV aggregation function: " + valueType);
     }
   }
+
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    Object[] values = new Object[numDocs];
+    FieldSpec.DataType valueType = blockValueSet.getValueType();
+    switch (valueType) {
+      case INT:
+        int[][] intValues = blockValueSet.getIntValuesMV();
+        for (int i = 0; i < numDocs; i++) {
+          HyperLogLog hyperLogLog =new HyperLogLog(DEFAULT_LOG2M);
+          for (int value : intValues[i]) {
+            hyperLogLog.offer(value);
+          }
+          values[i] = hyperLogLog;
+        }
+        break;
+      case LONG:
+        long[][] longValues = blockValueSet.getLongValuesMV();
+        for (int i = 0; i < numDocs; i++) {
+          HyperLogLog hyperLogLog =new HyperLogLog(DEFAULT_LOG2M);
+          for (long value : longValues[i]) {
+            hyperLogLog.offer(value);
+          }
+          values[i] = hyperLogLog;
+        }
+        break;
+      case FLOAT:
+        float[][] floatValues = blockValueSet.getFloatValuesMV();
+        for (int i = 0; i < numDocs; i++) {
+          HyperLogLog hyperLogLog =new HyperLogLog(DEFAULT_LOG2M);
+          for (float value : floatValues[i]) {
+            hyperLogLog.offer(value);
+          }
+          values[i] = hyperLogLog;
+        }
+        break;
+      case DOUBLE:
+        double[][] doubleValues = blockValueSet.getDoubleValuesMV();
+        for (int i = 0; i < numDocs; i++) {
+          HyperLogLog hyperLogLog =new HyperLogLog(DEFAULT_LOG2M);
+          for (double value : doubleValues[i]) {
+            hyperLogLog.offer(value);
+          }
+          values[i] = hyperLogLog;
+        }
+        break;
+      case STRING:
+        String[][] stringValues = blockValueSet.getStringValuesMV();
+        for (int i = 0; i < numDocs; i++) {
+          HyperLogLog hyperLogLog =new HyperLogLog(DEFAULT_LOG2M);
+          for (String value : stringValues[i]) {
+            hyperLogLog.offer(value);
+          }
+          values[i] = hyperLogLog;
+        }
+        break;
+      default:
+        throw new IllegalStateException(
+            "Illegal data type for DISTINCT_COUNT_HLL_MV aggregation function: " + valueType);
+    }
+    return values;
+  }
 }

@@ -176,6 +176,34 @@ public class MinMaxRangeAggregationFunction implements AggregationFunction<MinMa
     }
   }
 
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    Object[] values = new Object[numDocs];
+    FieldSpec.DataType valueType = blockValueSet.getValueType();
+    switch (valueType) {
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+        double[] valueArray = blockValueSet.getDoubleValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          double value = valueArray[i];
+          values[i] = new MinMaxRangePair(value, value);
+        }
+        break;
+      case BYTES:
+        // Serialized MinMaxRangePair
+        byte[][] bytesValues = blockValueSet.getBytesValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = ObjectSerDeUtils.MIN_MAX_RANGE_PAIR_SER_DE.deserialize(bytesValues[i]);
+        }
+        break;
+      default:
+        throw new IllegalStateException("Illegal data type for MIN_MAX_RANGE aggregation function: " + valueType);
+    }
+    return values;
+  }
+
   protected void setGroupByResult(int groupKey, @Nonnull GroupByResultHolder groupByResultHolder, double min,
       double max) {
     MinMaxRangePair minMaxRangePair = groupByResultHolder.getResult(groupKey);

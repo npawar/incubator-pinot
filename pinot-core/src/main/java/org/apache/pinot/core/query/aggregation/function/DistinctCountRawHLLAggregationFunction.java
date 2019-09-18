@@ -79,6 +79,11 @@ public class DistinctCountRawHLLAggregationFunction implements AggregationFuncti
     _distinctCountHLLAggregationFunction.aggregateGroupByMV(length, groupKeysArray, groupByResultHolder, blockValSets);
   }
 
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    return _distinctCountHLLAggregationFunction.getValuesFromBlock(blockValueSet, numDocs);
+  }
+
   @Nonnull
   @Override
   public HyperLogLog extractAggregationResult(@Nonnull AggregationResultHolder aggregationResultHolder) {

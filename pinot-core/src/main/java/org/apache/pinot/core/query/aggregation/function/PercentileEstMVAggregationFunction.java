@@ -82,4 +82,18 @@ public class PercentileEstMVAggregationFunction extends PercentileEstAggregation
       }
     }
   }
+
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    double[][] doubleValues = blockValueSet.getDoubleValuesMV();
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      QuantileDigest quantileDigest = new QuantileDigest(DEFAULT_MAX_ERROR);
+      for (double value : doubleValues[i]) {
+        quantileDigest.add((long) value);
+      }
+      values[i] = quantileDigest;
+    }
+    return values;
+  }
 }

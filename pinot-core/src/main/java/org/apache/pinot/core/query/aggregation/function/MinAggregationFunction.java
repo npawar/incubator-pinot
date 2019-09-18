@@ -101,6 +101,16 @@ public class MinAggregationFunction implements AggregationFunction<Double, Doubl
     }
   }
 
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    double[] doubleValues = blockValueSet.getDoubleValuesSV();
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      values[i] = doubleValues[i];
+    }
+    return values;
+  }
+
   @Nonnull
   @Override
   public Double extractAggregationResult(@Nonnull AggregationResultHolder aggregationResultHolder) {

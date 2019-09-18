@@ -71,4 +71,14 @@ public class CountMVAggregationFunction extends CountAggregationFunction {
       }
     }
   }
+
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    int[] valueArray = blockValueSet.getNumMVEntries();
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      values[i] = (long) valueArray[i];
+    }
+    return values;
+  }
 }

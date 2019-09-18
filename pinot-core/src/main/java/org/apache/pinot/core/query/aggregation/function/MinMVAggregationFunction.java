@@ -87,4 +87,20 @@ public class MinMVAggregationFunction extends MinAggregationFunction {
       }
     }
   }
+
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    double[][] doubleValues = blockValueSet.getDoubleValuesMV();
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      double min = 0.0;
+      for (double value : doubleValues[i]) {
+        if (value < min) {
+          min = value;
+        }
+      }
+      values[i] = min;
+    }
+    return values;
+  }
 }

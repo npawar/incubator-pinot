@@ -82,4 +82,18 @@ public class PercentileMVAggregationFunction extends PercentileAggregationFuncti
       }
     }
   }
+
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    double[][] doubleValues = blockValueSet.getDoubleValuesMV();
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      DoubleArrayList doubleArrayList = new DoubleArrayList();
+      for (double value : doubleValues[i]) {
+        doubleArrayList.add(value);
+      }
+      values[i] = doubleArrayList;
+    }
+    return values;
+  }
 }

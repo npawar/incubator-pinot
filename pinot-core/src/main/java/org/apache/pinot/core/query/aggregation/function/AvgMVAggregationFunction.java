@@ -22,6 +22,7 @@ import javax.annotation.Nonnull;
 import org.apache.pinot.common.function.AggregationFunctionType;
 import org.apache.pinot.core.common.BlockValSet;
 import org.apache.pinot.core.query.aggregation.AggregationResultHolder;
+import org.apache.pinot.core.query.aggregation.function.customobject.AvgPair;
 import org.apache.pinot.core.query.aggregation.groupby.GroupByResultHolder;
 
 
@@ -74,6 +75,21 @@ public class AvgMVAggregationFunction extends AvgAggregationFunction {
         aggregateOnGroupKey(groupKey, groupByResultHolder, values);
       }
     }
+  }
+
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    double[][] doubleValues = blockValueSet.getDoubleValuesMV();
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      double sum = 0.0;
+      for (double value : doubleValues[i]) {
+        sum += value;
+      }
+      long count = doubleValues[i].length;
+      values[i] = new AvgPair(sum, count);
+    }
+    return values;
   }
 
   private void aggregateOnGroupKey(int groupKey, @Nonnull GroupByResultHolder groupByResultHolder, double[] values) {

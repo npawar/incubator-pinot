@@ -101,6 +101,18 @@ public class PercentileAggregationFunction implements AggregationFunction<Double
     }
   }
 
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    double[] doubleValues = blockValueSet.getDoubleValuesSV();
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      DoubleArrayList doubleArrayList = new DoubleArrayList();
+      doubleArrayList.add(doubleValues[i]);
+      values[i] = doubleArrayList;
+    }
+    return values;
+  }
+
   @Nonnull
   @Override
   public DoubleArrayList extractAggregationResult(@Nonnull AggregationResultHolder aggregationResultHolder) {

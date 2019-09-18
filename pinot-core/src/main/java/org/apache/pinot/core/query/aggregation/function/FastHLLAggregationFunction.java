@@ -112,6 +112,16 @@ public class FastHLLAggregationFunction implements AggregationFunction<HyperLogL
     }
   }
 
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    String[] stringValues = blockValueSet.getStringValuesSV();
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      values[i] = HllUtil.convertStringToHll(stringValues[i]);
+    }
+    return values;
+  }
+
   @Nonnull
   @Override
   public HyperLogLog extractAggregationResult(@Nonnull AggregationResultHolder aggregationResultHolder) {

@@ -159,6 +159,35 @@ public class PercentileEstAggregationFunction implements AggregationFunction<Qua
     }
   }
 
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    Object[] values = new Object[numDocs];
+    FieldSpec.DataType valueType = blockValueSet.getValueType();
+    switch (valueType) {
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+        double[] valueArray = blockValueSet.getDoubleValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          QuantileDigest quantileDigest = new QuantileDigest(DEFAULT_MAX_ERROR);
+          quantileDigest.add((long) valueArray[i]);
+          values[i] = quantileDigest;
+        }
+        break;
+      case BYTES:
+        // Serialized QuantileDigest
+        byte[][] bytesValues = blockValueSet.getBytesValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = ObjectSerDeUtils.QUANTILE_DIGEST_SER_DE.deserialize(bytesValues[i]);
+        }
+        break;
+      default:
+        throw new IllegalStateException("Illegal data type for PERCENTILE_EST aggregation function: " + valueType);
+    }
+    return values;
+  }
+
   @Nonnull
   @Override
   public QuantileDigest extractAggregationResult(@Nonnull AggregationResultHolder aggregationResultHolder) {

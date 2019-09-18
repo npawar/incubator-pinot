@@ -81,4 +81,18 @@ public class SumMVAggregationFunction extends SumAggregationFunction {
       }
     }
   }
+
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    double[][] doubleValues = blockValueSet.getDoubleValuesMV();
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      double sum = 0.0;
+      for (double value : doubleValues[i]) {
+        sum += value;
+      }
+      values[i] = sum;
+    }
+    return values;
+  }
 }

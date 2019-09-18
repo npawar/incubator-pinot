@@ -58,4 +58,9 @@ public class DistinctCountRawHLLMVAggregationFunction extends DistinctCountRawHL
       @Nonnull GroupByResultHolder groupByResultHolder, @Nonnull BlockValSet... blockValSets) {
     _distinctCountHLLMVAggregationFunction.aggregateGroupByMV(length, groupKeysArray, groupByResultHolder, blockValSets);
   }
+
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    return _distinctCountHLLMVAggregationFunction.getValuesFromBlock(blockValueSet, numDocs);
+  }
 }

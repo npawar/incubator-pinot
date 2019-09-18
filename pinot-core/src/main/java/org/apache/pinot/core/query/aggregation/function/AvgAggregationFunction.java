@@ -134,6 +134,35 @@ public class AvgAggregationFunction implements AggregationFunction<AvgPair, Doub
   }
 
   @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    Object[] values = new Object[numDocs];
+
+    FieldSpec.DataType valueType = blockValueSet.getValueType();
+    switch (valueType) {
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+        double[] doubleValues = blockValueSet.getDoubleValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = new AvgPair(doubleValues[i], 1L);
+        }
+        break;
+      case BYTES:
+        // Serialized AvgPair
+        byte[][] bytesValues = blockValueSet.getBytesValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = ObjectSerDeUtils.AVG_PAIR_SER_DE.deserialize(bytesValues[i]);
+        }
+        break;
+      default:
+        throw new IllegalStateException("Illegal data type for AVG aggregation function: " + valueType);
+    }
+
+    return values;
+  }
+
+  @Override
   public void aggregateGroupByMV(int length, @Nonnull int[][] groupKeysArray,
       @Nonnull GroupByResultHolder groupByResultHolder, @Nonnull BlockValSet... blockValSets) {
     FieldSpec.DataType valueType = blockValSets[0].getValueType();

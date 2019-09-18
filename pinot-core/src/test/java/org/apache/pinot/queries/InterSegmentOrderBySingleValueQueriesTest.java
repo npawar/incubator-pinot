@@ -48,9 +48,26 @@ public class InterSegmentOrderBySingleValueQueriesTest extends BaseSingleValueQu
   public void testGroupByOrderBy(String query, List<Serializable[]> expectedResults, long expectedNumDocsScanned,
       long expectedNumEntriesScannedInFilter, long expectedNumEntriesScannedPostFilter, long expectedNumTotalDocs) {
     Map<String, String> queryOptions = new HashMap<>(2);
-    queryOptions.put(QueryOptionKey.GROUP_BY_MODE, "v2");
     queryOptions.put(QueryOptionKey.RESPONSE_FORMAT, SQL);
-    BrokerResponseNative brokerResponse = getBrokerResponseForQuery(query, queryOptions);
+    BrokerResponseNative brokerResponse;
+
+    queryOptions.put(QueryOptionKey.GROUP_BY_MODE, "v0");
+    brokerResponse = getBrokerResponseForQuery(query, queryOptions);
+    QueriesTestUtils.testInterSegmentGroupByOrderByResult(brokerResponse, expectedNumDocsScanned,
+        expectedNumEntriesScannedInFilter, expectedNumEntriesScannedPostFilter, expectedNumTotalDocs, expectedResults);
+
+    queryOptions.put(QueryOptionKey.GROUP_BY_MODE, "v1");
+    brokerResponse = getBrokerResponseForQuery(query, queryOptions);
+    QueriesTestUtils.testInterSegmentGroupByOrderByResult(brokerResponse, expectedNumDocsScanned,
+        expectedNumEntriesScannedInFilter, expectedNumEntriesScannedPostFilter, expectedNumTotalDocs, expectedResults);
+
+    queryOptions.put(QueryOptionKey.GROUP_BY_MODE, "v2");
+    brokerResponse = getBrokerResponseForQuery(query, queryOptions);
+    QueriesTestUtils.testInterSegmentGroupByOrderByResult(brokerResponse, expectedNumDocsScanned,
+        expectedNumEntriesScannedInFilter, expectedNumEntriesScannedPostFilter, expectedNumTotalDocs, expectedResults);
+
+    queryOptions.put(QueryOptionKey.GROUP_BY_MODE, "v3");
+    brokerResponse = getBrokerResponseForQuery(query, queryOptions);
     QueriesTestUtils.testInterSegmentGroupByOrderByResult(brokerResponse, expectedNumDocsScanned,
         expectedNumEntriesScannedInFilter, expectedNumEntriesScannedPostFilter, expectedNumTotalDocs, expectedResults);
   }
@@ -126,7 +143,7 @@ public class InterSegmentOrderBySingleValueQueriesTest extends BaseSingleValueQu
     long numEntriesScannedPostFilter;
     long numTotalDocs = 120000;
 
-    /*// order by one of the group by columns
+    // order by one of the group by columns
     query = "SELECT SUM(column1) FROM testTable GROUP BY column11 ORDER BY column11";
     results = Lists.newArrayList(new Serializable[]{"", 5935285005452.0}, new Serializable[]{"P", 88832999206836.0},
         new Serializable[]{"gFuH", 63202785888.0}, new Serializable[]{"o", 18105331533948.0},
@@ -293,7 +310,7 @@ public class InterSegmentOrderBySingleValueQueriesTest extends BaseSingleValueQu
     numEntriesScannedPostFilter = 120000;
     data.add(new Object[]{query, results, numDocsScanned, numEntriesScannedInFilter, numEntriesScannedPostFilter,
         numTotalDocs});
-*/
+
     // Object type aggregation - comparable intermediate results (AVG, MINMAXRANGE)
     query = "SELECT AVG(column6) FROM testTable GROUP BY column11  ORDER BY column11";
     results = Lists.newArrayList(new Serializable[]{"", 296467636.0}, new Serializable[]{"P", 909380310.3521485},
@@ -303,7 +320,7 @@ public class InterSegmentOrderBySingleValueQueriesTest extends BaseSingleValueQu
     data.add(new Object[]{query, results, numDocsScanned, numEntriesScannedInFilter, numEntriesScannedPostFilter,
         numTotalDocs});
 
-   /* query = "SELECT AVG(column6) FROM testTable GROUP BY column11 ORDER BY AVG(column6), column11 DESC";
+    query = "SELECT AVG(column6) FROM testTable GROUP BY column11 ORDER BY AVG(column6), column11 DESC";
     results = Lists.newArrayList(new Serializable[]{"o", 296467636.0}, new Serializable[]{"gFuH", 296467636.0},
         new Serializable[]{"", 296467636.0}, new Serializable[]{"t", 526245333.3900426},
         new Serializable[]{"P", 909380310.3521485});
@@ -339,7 +356,7 @@ public class InterSegmentOrderBySingleValueQueriesTest extends BaseSingleValueQu
     numDocsScanned = 0;
     numEntriesScannedPostFilter = 0;
     data.add(new Object[]{query, results, numDocsScanned, numEntriesScannedInFilter, numEntriesScannedPostFilter,
-        numTotalDocs});*/
+        numTotalDocs});
 
     return data.toArray(new Object[data.size()][]);
   }

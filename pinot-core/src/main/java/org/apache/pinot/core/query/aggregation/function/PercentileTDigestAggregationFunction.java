@@ -162,6 +162,35 @@ public class PercentileTDigestAggregationFunction implements AggregationFunction
     }
   }
 
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    Object[] values = new Object[numDocs];
+    FieldSpec.DataType valueType = blockValueSet.getValueType();
+    switch (valueType) {
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+        double[] valueArray = blockValueSet.getDoubleValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          TDigest tDigest = TDigest.createMergingDigest(DEFAULT_TDIGEST_COMPRESSION);
+          tDigest.add(valueArray[i]);
+          values[i] = tDigest;
+        }
+        break;
+      case BYTES:
+        // Serialized TDigest
+        byte[][] bytesValues = blockValueSet.getBytesValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          values[i] = ObjectSerDeUtils.TDIGEST_SER_DE.deserialize(ByteBuffer.wrap(bytesValues[i]));
+        }
+        break;
+      default:
+        throw new IllegalStateException("Illegal data type for PERCENTILE_TDIGEST aggregation function: " + valueType);
+    }
+    return values;
+  }
+
   @Nonnull
   @Override
   public TDigest extractAggregationResult(@Nonnull AggregationResultHolder aggregationResultHolder) {

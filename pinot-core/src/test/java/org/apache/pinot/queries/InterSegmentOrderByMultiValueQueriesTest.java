@@ -43,9 +43,26 @@ public class InterSegmentOrderByMultiValueQueriesTest extends BaseMultiValueQuer
   public void testAggregationOrderedGroupByResults(String query, List<Serializable[]> expectedResults,
       long expectedNumEntriesScannedPostFilter) {
     Map<String, String> queryOptions = new HashMap<>(2);
-    queryOptions.put(CommonConstants.Broker.Request.QueryOptionKey.GROUP_BY_MODE, SQL);
     queryOptions.put(QueryOptionKey.RESPONSE_FORMAT, SQL);
-    BrokerResponseNative brokerResponse = getBrokerResponseForQuery(query, queryOptions);
+    BrokerResponseNative brokerResponse;
+
+    queryOptions.put(CommonConstants.Broker.Request.QueryOptionKey.GROUP_BY_MODE, "v0");
+    brokerResponse = getBrokerResponseForQuery(query, queryOptions);
+    QueriesTestUtils.testInterSegmentGroupByOrderByResult(brokerResponse, 400000L, 0,
+        expectedNumEntriesScannedPostFilter, 400000L, expectedResults);
+
+    queryOptions.put(CommonConstants.Broker.Request.QueryOptionKey.GROUP_BY_MODE, "v1");
+    brokerResponse = getBrokerResponseForQuery(query, queryOptions);
+    QueriesTestUtils.testInterSegmentGroupByOrderByResult(brokerResponse, 400000L, 0,
+        expectedNumEntriesScannedPostFilter, 400000L, expectedResults);
+
+    queryOptions.put(CommonConstants.Broker.Request.QueryOptionKey.GROUP_BY_MODE, "v2");
+    brokerResponse = getBrokerResponseForQuery(query, queryOptions);
+    QueriesTestUtils.testInterSegmentGroupByOrderByResult(brokerResponse, 400000L, 0,
+        expectedNumEntriesScannedPostFilter, 400000L, expectedResults);
+
+    queryOptions.put(CommonConstants.Broker.Request.QueryOptionKey.GROUP_BY_MODE, "v3");
+    brokerResponse = getBrokerResponseForQuery(query, queryOptions);
     QueriesTestUtils.testInterSegmentGroupByOrderByResult(brokerResponse, 400000L, 0,
         expectedNumEntriesScannedPostFilter, 400000L, expectedResults);
   }
@@ -112,6 +129,14 @@ public class InterSegmentOrderByMultiValueQueriesTest extends BaseMultiValueQuer
     query = "SELECT DISTINCTCOUNTMV(column7) FROM testTable GROUP BY column5 ORDER BY DISTINCTCOUNTMV(column7) top 5";
     results = Lists.newArrayList(new Serializable[]{"NCoFku", 26}, new Serializable[]{"mhoVvrJm", 65},
         new Serializable[]{"JXRmGakTYafZFPm", 126}, new Serializable[]{"PbQd", 211}, new Serializable[]{"OKyOqU", 216});
+    numEntriesScannedPostFilter = 800000;
+    data.add(new Object[]{query, results, numEntriesScannedPostFilter});
+
+    // count *
+    query = "SELECT COUNTMV(column7) FROM testTable GROUP BY column3 ORDER BY COUNTMV(column7) ASC";
+    results = Lists.newArrayList(new Serializable[]{"PbQd", 932L}, new Serializable[]{"", 29764L},
+        new Serializable[]{"L", 36932L}, new Serializable[]{"P", 99168L},
+        new Serializable[]{"w", 369564L});
     numEntriesScannedPostFilter = 800000;
     data.add(new Object[]{query, results, numEntriesScannedPostFilter});
 

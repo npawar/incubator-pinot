@@ -183,6 +183,57 @@ public class DistinctCountAggregationFunction implements AggregationFunction<Int
     }
   }
 
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    Object[] values = new Object[numDocs];
+    FieldSpec.DataType valueType = blockValueSet.getValueType();
+    switch (valueType) {
+      case INT:
+        int[] intValues = blockValueSet.getIntValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          IntOpenHashSet intOpenHashSet = new IntOpenHashSet();
+          intOpenHashSet.add(intValues[i]);
+          values[i] = intOpenHashSet;
+        }
+        break;
+      case LONG:
+        long[] longValues = blockValueSet.getLongValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          IntOpenHashSet intOpenHashSet = new IntOpenHashSet();
+          intOpenHashSet.add(Long.hashCode(longValues[i]));
+          values[i] = intOpenHashSet;
+        }
+        break;
+      case FLOAT:
+        float[] floatValues = blockValueSet.getFloatValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          IntOpenHashSet intOpenHashSet = new IntOpenHashSet();
+          intOpenHashSet.add(Float.hashCode(floatValues[i]));
+          values[i] = intOpenHashSet;
+        }
+        break;
+      case DOUBLE:
+        double[] doubleValues = blockValueSet.getDoubleValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          IntOpenHashSet intOpenHashSet = new IntOpenHashSet();
+          intOpenHashSet.add(Double.hashCode(doubleValues[i]));
+          values[i] = intOpenHashSet;
+        }
+        break;
+      case STRING:
+        String[] stringValues = blockValueSet.getStringValuesSV();
+        for (int i = 0; i < numDocs; i++) {
+          IntOpenHashSet intOpenHashSet = new IntOpenHashSet();
+          intOpenHashSet.add(stringValues[i].hashCode());
+          values[i] = intOpenHashSet;
+        }
+        break;
+      default:
+        throw new IllegalStateException("Illegal data type for DISTINCT_COUNT aggregation function: " + valueType);
+    }
+    return values;
+  }
+
   @Nonnull
   @Override
   public IntOpenHashSet extractAggregationResult(@Nonnull AggregationResultHolder aggregationResultHolder) {

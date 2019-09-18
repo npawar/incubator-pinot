@@ -29,12 +29,6 @@ import org.apache.pinot.core.operator.blocks.IntermediateResultsBlock;
 
 public abstract class BaseAggregationGroupByOperator extends BaseOperator<IntermediateResultsBlock> {
 
-  Object[] getCountValues(int numDocs) {
-    Object[] values = new Object[numDocs];
-    Arrays.fill(values, 1L);
-    return values;
-  }
-
   Object[] getValuesSV(BlockValSet blockValueSet, int numDocs, DataSchema.ColumnDataType columnDataType) {
     Object[] values = new Object[numDocs];
     switch (columnDataType) {

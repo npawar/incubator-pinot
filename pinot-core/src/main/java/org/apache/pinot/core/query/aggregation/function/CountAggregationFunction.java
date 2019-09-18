@@ -116,6 +116,15 @@ public class CountAggregationFunction implements AggregationFunction<Long, Long>
     }
   }
 
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      values[i] = 1L;
+    }
+    return values;
+  }
+
   @Nonnull
   @Override
   public Long extractAggregationResult(@Nonnull AggregationResultHolder aggregationResultHolder) {

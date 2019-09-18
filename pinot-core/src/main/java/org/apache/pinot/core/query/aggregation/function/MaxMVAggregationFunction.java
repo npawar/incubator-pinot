@@ -87,4 +87,20 @@ public class MaxMVAggregationFunction extends MaxAggregationFunction {
       }
     }
   }
+
+  @Override
+  public Object[] getValuesFromBlock(BlockValSet blockValueSet, int numDocs) {
+    double[][] doubleValues = blockValueSet.getDoubleValuesMV();
+    Object[] values = new Object[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      double max = 0.0;
+      for (double value : doubleValues[i]) {
+        if (value > max) {
+          max = value;
+        }
+      }
+      values[i] = max;
+    }
+    return values;
+  }
 }

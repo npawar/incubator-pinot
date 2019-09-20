@@ -55,6 +55,7 @@ import org.apache.pinot.common.utils.CommonConstants.Broker.Request.*;
 import org.apache.pinot.common.utils.DataSchema;
 import org.apache.pinot.common.utils.DataSchema.ColumnDataType;
 import org.apache.pinot.common.utils.DataTable;
+import org.apache.pinot.core.data.order.OrderByUtils;
 import org.apache.pinot.core.data.table.ConcurrentIndexedTable;
 import org.apache.pinot.core.data.table.IndexedTable;
 import org.apache.pinot.core.data.table.Key;
@@ -502,8 +503,7 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
       throws Throwable {
 
     IndexedTable indexedTable = new ConcurrentIndexedTable();
-    // setting a higher value to avoid frequent resizing
-    int capacity = (int) Math.max(groupBy.getTopN(), 10000);
+    int capacity = Math.max(((int) groupBy.getTopN()) * 5, OrderByUtils.NUM_RESULTS_LOWER_LIMIT);
     indexedTable.init(dataSchema, aggregationInfos, orderBy, capacity, true);
 
     for (DataTable dataTable : dataTableMap.values()) {

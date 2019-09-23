@@ -40,8 +40,6 @@ import static org.apache.pinot.common.utils.DataSchema.*;
  */
 public final class OrderByUtils {
 
-  public static final int NUM_RESULTS_LOWER_LIMIT = 5000;
-
   private OrderByUtils() {
   }
 

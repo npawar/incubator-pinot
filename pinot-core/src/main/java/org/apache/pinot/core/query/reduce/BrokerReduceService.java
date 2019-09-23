@@ -55,7 +55,6 @@ import org.apache.pinot.common.utils.CommonConstants.Broker.Request.*;
 import org.apache.pinot.common.utils.DataSchema;
 import org.apache.pinot.common.utils.DataSchema.ColumnDataType;
 import org.apache.pinot.common.utils.DataTable;
-import org.apache.pinot.core.data.order.OrderByUtils;
 import org.apache.pinot.core.data.table.ConcurrentIndexedTable;
 import org.apache.pinot.core.data.table.IndexedTable;
 import org.apache.pinot.core.data.table.Key;
@@ -65,6 +64,7 @@ import org.apache.pinot.core.query.aggregation.function.AggregationFunctionUtils
 import org.apache.pinot.core.query.aggregation.groupby.AggregationGroupByTrimmingService;
 import org.apache.pinot.core.query.selection.SelectionOperatorService;
 import org.apache.pinot.core.query.selection.SelectionOperatorUtils;
+import org.apache.pinot.core.util.GroupByUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -229,9 +229,8 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
               SelectionOperatorUtils.getSelectionColumns(brokerRequest.getSelections().getSelectionColumns(),
                   cachedDataSchema);
           brokerResponseNative.setSelectionResults(new SelectionResults(selectionColumns, new ArrayList<>(0)));
-        } else if (brokerRequest.isSetGroupBy() && queryOptions != null && SQL.equalsIgnoreCase(
-            queryOptions.get(QueryOptionKey.GROUP_BY_MODE)) && SQL.equalsIgnoreCase(
-            queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
+        } else if (brokerRequest.isSetGroupBy() && GroupByUtils.isGroupByMode(SQL, queryOptions)
+            && GroupByUtils.isResponseFormat(SQL, queryOptions)) {
           setSQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
               brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
         }
@@ -273,12 +272,12 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
         } else { // Aggregation group-by query.
 
           // read results as records if  GROUP_BY_MODE is explicitly set to SQL
-          if (queryOptions != null && SQL.equalsIgnoreCase(queryOptions.get(QueryOptionKey.GROUP_BY_MODE))) {
+          if (GroupByUtils.isGroupByMode(SQL, queryOptions)) {
             // sql + order by
 
             int resultSize = 0;
             // if RESPONSE_FORMAT is SQL, return results in {@link ResultTable}
-            if (SQL.equalsIgnoreCase(queryOptions.get(QueryOptionKey.RESPONSE_FORMAT))) {
+            if (GroupByUtils.isResponseFormat(SQL, queryOptions)) {
               setSQLGroupByOrderByResults(brokerResponseNative, cachedDataSchema, brokerRequest.getAggregationsInfo(),
                   brokerRequest.getGroupBy(), brokerRequest.getOrderBy(), dataTableMap, preserveType);
               resultSize = brokerResponseNative.getResultTable().getRows().size();
@@ -503,7 +502,7 @@ public class BrokerReduceService implements ReduceService<BrokerResponseNative> 
       throws Throwable {
 
     IndexedTable indexedTable = new ConcurrentIndexedTable();
-    int capacity = Math.max(((int) groupBy.getTopN()) * 5, OrderByUtils.NUM_RESULTS_LOWER_LIMIT);
+    int capacity = GroupByUtils.getTableCapacity((int) groupBy.getTopN());
     indexedTable.init(dataSchema, aggregationInfos, orderBy, capacity, true);
 
     for (DataTable dataTable : dataTableMap.values()) {

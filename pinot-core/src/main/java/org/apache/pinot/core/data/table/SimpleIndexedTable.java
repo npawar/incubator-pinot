@@ -154,7 +154,7 @@ public class SimpleIndexedTable extends IndexedTable {
         resize(_capacity);
       }
       LOGGER
-          .debug("Num resizes : {}, Total time spent in resizing : {}, Avg resize time : {}", _numResizes, _resizeTime,
+          .info("Num resizes : {}, Total time spent in resizing : {}, Avg resize time : {}", _numResizes, _resizeTime,
               _numResizes == 0 ? 0 : _resizeTime / _numResizes);
     }
 

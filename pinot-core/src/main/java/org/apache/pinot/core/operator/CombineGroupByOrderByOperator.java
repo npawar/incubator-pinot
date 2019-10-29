@@ -41,6 +41,7 @@ import org.apache.pinot.core.common.Operator;
 import org.apache.pinot.core.data.table.ConcurrentIndexedTable;
 import org.apache.pinot.core.data.table.Key;
 import org.apache.pinot.core.data.table.Record;
+import org.apache.pinot.core.data.table.SimpleIndexedTable;
 import org.apache.pinot.core.operator.blocks.IntermediateResultsBlock;
 import org.apache.pinot.core.query.aggregation.groupby.AggregationGroupByResult;
 import org.apache.pinot.core.query.aggregation.groupby.GroupKeyGenerator;
@@ -62,12 +63,9 @@ public class CombineGroupByOrderByOperator extends BaseOperator<IntermediateResu
 
   private final List<Operator> _operators;
   private final BrokerRequest _brokerRequest;
-  private final ExecutorService _executorService;
-  private final long _timeOutMs;
   private final int _indexedTableCapacity;
-  private Lock _initLock;
   private DataSchema _dataSchema;
-  private ConcurrentIndexedTable _indexedTable;
+  private SimpleIndexedTable _indexedTable;
 
   public CombineGroupByOrderByOperator(List<Operator> operators, BrokerRequest brokerRequest,
       ExecutorService executorService, long timeOutMs) {
@@ -75,9 +73,6 @@ public class CombineGroupByOrderByOperator extends BaseOperator<IntermediateResu
 
     _operators = operators;
     _brokerRequest = brokerRequest;
-    _executorService = executorService;
-    _timeOutMs = timeOutMs;
-    _initLock = new ReentrantLock();
     _indexedTableCapacity = GroupByUtils.getTableCapacity(brokerRequest.getGroupBy(), brokerRequest.getOrderBy());
   }
 
@@ -97,104 +92,68 @@ public class CombineGroupByOrderByOperator extends BaseOperator<IntermediateResu
    */
   @Override
   protected IntermediateResultsBlock getNextBlock() {
+    int numOperators = _operators.size();
     int numAggregationFunctions = _brokerRequest.getAggregationsInfoSize();
     int numGroupBy = _brokerRequest.getGroupBy().getExpressionsSize();
     ConcurrentLinkedQueue<ProcessingException> mergedProcessingExceptions = new ConcurrentLinkedQueue<>();
 
-    // We use a CountDownLatch to track if all Futures are finished by the query timeout, and cancel the unfinished
-    // futures (try to interrupt the execution if it already started).
-    // Besides the CountDownLatch, we also use a Phaser to ensure all the Futures are done (not scheduled, finished or
-    // interrupted) before the main thread returns. We need to ensure no execution left before the main thread returning
-    // because the main thread holds the reference to the segments, and if the segments are deleted/refreshed, the
-    // segments can be released after the main thread returns, which would lead to undefined behavior (even JVM crash)
-    // when executing queries against them.
-    int numOperators = _operators.size();
-    CountDownLatch operatorLatch = new CountDownLatch(numOperators);
-    Phaser phaser = new Phaser(1);
 
-    Future[] futures = new Future[numOperators];
-    for (int i = 0; i < numOperators; i++) {
-      int index = i;
-      futures[i] = _executorService.submit(new TraceRunnable() {
-        @SuppressWarnings("unchecked")
-        @Override
-        public void runJob() {
-          try {
-            // Register the thread to the phaser.
-            // If the phaser is terminated (returning negative value) when trying to register the thread, that means the
-            // query execution has timed out, and the main thread has deregistered itself and returned the result.
-            // Directly return as no execution result will be taken.
-            if (phaser.register() < 0) {
-              return;
+    for (int index = 0; index < numOperators; index++) {
+      AggregationGroupByResult aggregationGroupByResult;
+
+      try {
+        IntermediateResultsBlock intermediateResultsBlock =
+            (IntermediateResultsBlock) _operators.get(index).nextBlock();
+
+        if (_dataSchema == null) {
+          _dataSchema = intermediateResultsBlock.getDataSchema();
+          _indexedTable =
+              new SimpleIndexedTable(_dataSchema, _brokerRequest.getAggregationsInfo(), _brokerRequest.getOrderBy(),
+                  _indexedTableCapacity);
+        }
+
+        // Merge processing exceptions.
+        List<ProcessingException> processingExceptionsToMerge = intermediateResultsBlock.getProcessingExceptions();
+        if (processingExceptionsToMerge != null) {
+          mergedProcessingExceptions.addAll(processingExceptionsToMerge);
+        }
+
+        // Merge aggregation group-by result.
+        aggregationGroupByResult = intermediateResultsBlock.getAggregationGroupByResult();
+        if (aggregationGroupByResult != null) {
+          // Get converter functions
+          Function[] converterFunctions = new Function[numGroupBy];
+          for (int i = 0; i < numGroupBy; i++) {
+            converterFunctions[i] = getConverterFunction(_dataSchema.getColumnDataType(i));
+          }
+
+          // Iterate over the group-by keys, for each key, update the group-by result in the indexedTable.
+          Iterator<GroupKeyGenerator.GroupKey> groupKeyIterator = aggregationGroupByResult.getGroupKeyIterator();
+          while (groupKeyIterator.hasNext()) {
+            GroupKeyGenerator.GroupKey groupKey = groupKeyIterator.next();
+            String[] stringKey = groupKey._stringKey.split(GroupKeyGenerator.DELIMITER);
+            Object[] objectKey = new Object[numGroupBy];
+            for (int i = 0; i < stringKey.length; i++) {
+              objectKey[i] = converterFunctions[i].apply(stringKey[i]);
+            }
+            Object[] values = new Object[numAggregationFunctions];
+            for (int i = 0; i < numAggregationFunctions; i++) {
+              values[i] = aggregationGroupByResult.getResultForKey(groupKey, i);
             }
 
-            IntermediateResultsBlock intermediateResultsBlock =
-                (IntermediateResultsBlock) _operators.get(index).nextBlock();
-
-            _initLock.lock();
-            try {
-              if (_dataSchema == null) {
-                _dataSchema = intermediateResultsBlock.getDataSchema();
-                _indexedTable = new ConcurrentIndexedTable(_dataSchema, _brokerRequest.getAggregationsInfo(),
-                    _brokerRequest.getOrderBy(), _indexedTableCapacity);
-              }
-            } finally {
-              _initLock.unlock();
-            }
-
-            // Merge processing exceptions.
-            List<ProcessingException> processingExceptionsToMerge = intermediateResultsBlock.getProcessingExceptions();
-            if (processingExceptionsToMerge != null) {
-              mergedProcessingExceptions.addAll(processingExceptionsToMerge);
-            }
-
-            // Merge aggregation group-by result.
-            AggregationGroupByResult aggregationGroupByResult = intermediateResultsBlock.getAggregationGroupByResult();
-            if (aggregationGroupByResult != null) {
-              // Get converter functions
-              Function[] converterFunctions = new Function[numGroupBy];
-              for (int i = 0; i < numGroupBy; i++) {
-                converterFunctions[i] = getConverterFunction(_dataSchema.getColumnDataType(i));
-              }
-
-              // Iterate over the group-by keys, for each key, update the group-by result in the indexedTable.
-              Iterator<GroupKeyGenerator.GroupKey> groupKeyIterator = aggregationGroupByResult.getGroupKeyIterator();
-              while (groupKeyIterator.hasNext()) {
-                GroupKeyGenerator.GroupKey groupKey = groupKeyIterator.next();
-                String[] stringKey = groupKey._stringKey.split(GroupKeyGenerator.DELIMITER);
-                Object[] objectKey = new Object[numGroupBy];
-                for (int i = 0; i < stringKey.length; i++) {
-                  objectKey[i] = converterFunctions[i].apply(stringKey[i]);
-                }
-                Object[] values = new Object[numAggregationFunctions];
-                for (int i = 0; i < numAggregationFunctions; i++) {
-                  values[i] = aggregationGroupByResult.getResultForKey(groupKey, i);
-                }
-
-                Record record = new Record(new Key(objectKey), values);
-                _indexedTable.upsert(record);
-              }
-            }
-          } catch (Exception e) {
-            LOGGER.error("Exception processing CombineGroupByOrderBy for index {}, operator {}", index,
-                _operators.get(index).getClass().getName(), e);
-            mergedProcessingExceptions.add(QueryException.getException(QueryException.QUERY_EXECUTION_ERROR, e));
-          } finally {
-            operatorLatch.countDown();
-            phaser.arriveAndDeregister();
+            Record record = new Record(new Key(objectKey), values);
+            _indexedTable.upsert(record);
           }
         }
-      });
+      } catch (Exception e) {
+        LOGGER.error("Exception processing CombineGroupByOrderBy for index {}, operator {}", index,
+            _operators.get(index).getClass().getName(), e);
+        mergedProcessingExceptions.add(QueryException.getException(QueryException.QUERY_EXECUTION_ERROR, e));
+      }
+
     }
 
     try {
-      boolean opCompleted = operatorLatch.await(_timeOutMs, TimeUnit.MILLISECONDS);
-      if (!opCompleted) {
-        // If this happens, the broker side should already timed out, just log the error and return
-        String errorMessage = "Timed out while combining group-by results after " + _timeOutMs + "ms";
-        LOGGER.error(errorMessage);
-        return new IntermediateResultsBlock(new TimeoutException(errorMessage));
-      }
 
       _indexedTable.finish(false);
       IntermediateResultsBlock mergedBlock = new IntermediateResultsBlock(_indexedTable);
@@ -226,15 +185,6 @@ public class CombineGroupByOrderByOperator extends BaseOperator<IntermediateResu
       return mergedBlock;
     } catch (Exception e) {
       return new IntermediateResultsBlock(e);
-    } finally {
-      // Cancel all ongoing jobs
-      for (Future future : futures) {
-        if (!future.isDone()) {
-          future.cancel(true);
-        }
-      }
-      // Deregister the main thread and wait for all threads done
-      phaser.awaitAdvance(phaser.arriveAndDeregister());
     }
   }
 

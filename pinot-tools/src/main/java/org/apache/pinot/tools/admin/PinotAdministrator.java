@@ -28,6 +28,7 @@ import org.apache.pinot.tools.admin.command.AvroSchemaToPinotSchema;
 import org.apache.pinot.tools.admin.command.BackfillDateTimeColumnCommand;
 import org.apache.pinot.tools.admin.command.ChangeNumReplicasCommand;
 import org.apache.pinot.tools.admin.command.ChangeTableState;
+import org.apache.pinot.tools.admin.command.CheckCalciteParser;
 import org.apache.pinot.tools.admin.command.CreateSegmentCommand;
 import org.apache.pinot.tools.admin.command.DeleteClusterCommand;
 import org.apache.pinot.tools.admin.command.GenerateDataCommand;
@@ -116,7 +117,8 @@ public class PinotAdministrator {
       @SubCommand(name = "CollectMetadataForIndexTuning", impl = CollectMetadataForIndexTuning.class),
       @SubCommand(name = "EntriesScannedQuantileReport", impl = EntriesScannedQuantileReport.class),
       @SubCommand(name = "IndexTuner", impl = IndexTunerCommand.class),
-      @SubCommand(name = "AnonymizeData", impl = AnonymizeDataCommand.class)
+      @SubCommand(name = "AnonymizeData", impl = AnonymizeDataCommand.class),
+      @SubCommand(name = "CheckCalciteParser", impl = CheckCalciteParser.class)
   })
   Command _subCommand;
   //@formatter:on

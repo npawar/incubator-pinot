@@ -140,7 +140,7 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
 
     PinotQueryRequest pinotQueryRequest = getPinotQueryRequest(request);
     String query = pinotQueryRequest.getQuery();
-    LOGGER.debug("Query string for request {}: {}", requestId, pinotQueryRequest.getQuery());
+    LOGGER.info("Query string for request {}: {}", requestId, pinotQueryRequest.getQuery());
     requestStatistics.setPql(query);
 
     // Compile the request
@@ -387,14 +387,16 @@ public abstract class BaseBrokerRequestHandler implements BrokerRequestHandler {
       Map<String, String> queryOptionsFromJson = getOptionsFromJson(jsonRequest, Broker.Request.QUERY_OPTIONS);
       queryOptions.putAll(queryOptionsFromJson);
     }
+    LOGGER.info("QueryOptions:{}", queryOptions);
     Map<String, String> queryOptionsFromBrokerRequest = brokerRequest.getQueryOptions();
     if (queryOptionsFromBrokerRequest != null) {
       queryOptions.putAll(queryOptionsFromBrokerRequest);
     }
+    LOGGER.info("QueryOptions:{}", queryOptions);
     if (!queryOptions.isEmpty()) {
       brokerRequest.setQueryOptions(queryOptions);
       LOGGER
-          .debug("Query options are set to: {} for request {}: {}", brokerRequest.getQueryOptions(), requestId, query);
+          .info("Query options are set to: {} for request {}: {}", brokerRequest.getQueryOptions(), requestId, query);
     }
   }
 

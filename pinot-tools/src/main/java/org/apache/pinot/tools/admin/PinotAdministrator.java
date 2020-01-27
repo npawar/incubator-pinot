@@ -39,6 +39,7 @@ import org.apache.pinot.tools.admin.command.PostQueryCommand;
 import org.apache.pinot.tools.admin.command.RealtimeProvisioningHelperCommand;
 import org.apache.pinot.tools.admin.command.RebalanceTableCommand;
 import org.apache.pinot.tools.admin.command.ShowClusterInfoCommand;
+import org.apache.pinot.tools.admin.command.SqlQueryCheckCommand;
 import org.apache.pinot.tools.admin.command.StartBrokerCommand;
 import org.apache.pinot.tools.admin.command.StartControllerCommand;
 import org.apache.pinot.tools.admin.command.StartKafkaCommand;
@@ -121,7 +122,8 @@ public class PinotAdministrator {
       @SubCommand(name = "CollectMetadataForIndexTuning", impl = CollectMetadataForIndexTuning.class),
       @SubCommand(name = "EntriesScannedQuantileReport", impl = EntriesScannedQuantileReport.class),
       @SubCommand(name = "IndexTuner", impl = IndexTunerCommand.class),
-      @SubCommand(name = "AnonymizeData", impl = AnonymizeDataCommand.class)
+      @SubCommand(name = "AnonymizeData", impl = AnonymizeDataCommand.class),
+      @SubCommand(name = "SqlQueryCheck", impl = SqlQueryCheckCommand.class)
   })
   Command _subCommand;
   //@formatter:on

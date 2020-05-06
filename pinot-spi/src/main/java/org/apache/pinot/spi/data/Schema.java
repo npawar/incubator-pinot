@@ -47,13 +47,16 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The <code>Schema</code> class is defined for each table to describe the details of the table's fields (columns).
- * <p>Four field types are supported: DIMENSION, METRIC, TIME, DATE_TIME.
- * ({@link DimensionFieldSpec}, {@link MetricFieldSpec},
- * {@link TimeFieldSpec}, {@link DateTimeFieldSpec})
+ * <p>3 field types are supported: DIMENSION, METRIC, DATE_TIME.
+ * ({@link DimensionFieldSpec}, {@link MetricFieldSpec}, {@link DateTimeFieldSpec})
  * <p>For each field, a {@link FieldSpec} is defined to provide the details of the field.
- * <p>There could be multiple DIMENSION or METRIC or DATE_TIME fields, but at most 1 TIME field.
+ * <p>There could be multiple DIMENSION or METRIC or DATE_TIME fields
  * <p>In pinot, we store data using 5 <code>DataType</code>s: INT, LONG, FLOAT, DOUBLE, STRING. All other
  * <code>DataType</code>s will be converted to one of them.
+ *
+ * NOTE: TIME is no longer a schema field type https://github.com/apache/incubator-pinot/issues/2756
+ * TIME will be treated as DATE_TIME. All methods relate to TimeFieldSpec have been deprecated.
+ * Eventually, we will delete TIME
  */
 @SuppressWarnings("unused")
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -142,15 +145,24 @@ public final class Schema {
    */
   @Deprecated
   public void setDateTimeFieldSpecs(List<DateTimeFieldSpec> dateTimeFieldSpecs) {
-    Preconditions.checkState(_dateTimeFieldSpecs.isEmpty());
+    if (_timeFieldSpec == null) {
+      Preconditions
+          .checkState(_dateTimeFieldSpecs.isEmpty(), "Cannot define multiple 'dateTimeFieldSpecs' arrays in schema");
+    } else {
+      Preconditions
+          .checkState(_dateTimeFieldSpecs.size() == 1 && _dateTimeNames.get(0).equals(_timeFieldSpec.getName()),
+              "Found unexpected column in 'dateTimeFieldSpecs'. Expected only converted 'timeFieldSpec' "
+                  + _timeFieldSpec.getName() + "but found [" + _dateTimeNames + "]");
+    }
 
     for (DateTimeFieldSpec dateTimeFieldSpec : dateTimeFieldSpecs) {
       addField(dateTimeFieldSpec);
     }
   }
 
+  @Deprecated
   public TimeFieldSpec getTimeFieldSpec() {
-    return _timeFieldSpec;
+    return null;
   }
 
   /**
@@ -183,6 +195,11 @@ public final class Schema {
         break;
       case TIME:
         _timeFieldSpec = (TimeFieldSpec) fieldSpec;
+        // convert it to DateTimeFieldSpec.
+        DateTimeFieldSpec dateTimeFieldSpec = convertToDateTimeFieldSpec(_timeFieldSpec);
+        _dateTimeNames.add(columnName);
+        _dateTimeFieldSpecs.add(dateTimeFieldSpec);
+        fieldSpec = dateTimeFieldSpec;
         break;
       case DATE_TIME:
         _dateTimeNames.add(columnName);
@@ -216,13 +233,13 @@ public final class Schema {
           _metricNames.remove(index);
           _metricFieldSpecs.remove(index);
           break;
-        case TIME:
-          _timeFieldSpec = null;
-          break;
         case DATE_TIME:
           index = _dateTimeNames.indexOf(columnName);
           _dateTimeNames.remove(index);
           _dateTimeFieldSpecs.remove(index);
+          if (_timeFieldSpec != null && _timeFieldSpec.getName().equals(columnName)) {
+            _timeFieldSpec = null;
+          }
           break;
         default:
           throw new UnsupportedOperationException("Unsupported field type: " + fieldType);
@@ -334,9 +351,6 @@ public final class Schema {
       }
       jsonObject.set("metricFieldSpecs", jsonArray);
     }
-    if (_timeFieldSpec != null) {
-      jsonObject.set("timeFieldSpec", _timeFieldSpec.toJsonObject());
-    }
     if (!_dateTimeFieldSpecs.isEmpty()) {
       ArrayNode jsonArray = JsonUtils.newArrayNode();
       for (DateTimeFieldSpec dateTimeFieldSpec : _dateTimeFieldSpecs) {
@@ -388,7 +402,6 @@ public final class Schema {
       String fieldName = fieldSpec.getName();
       switch (fieldType) {
         case DIMENSION:
-        case TIME:
         case DATE_TIME:
           switch (dataType) {
             case INT:
@@ -399,7 +412,7 @@ public final class Schema {
             case BYTES:
               break;
             default:
-              ctxLogger.info("Unsupported data type: {} in DIMENSION/TIME field: {}", dataType, fieldName);
+              ctxLogger.info("Unsupported data type: {} in DIMENSION/DATE_TIME field: {}", dataType, fieldName);
               return false;
           }
           break;
@@ -549,7 +562,6 @@ public final class Schema {
     return EqualityUtils.isEqual(_schemaName, that._schemaName) && EqualityUtils
         .isEqualIgnoreOrder(_dimensionFieldSpecs, that._dimensionFieldSpecs) && EqualityUtils
         .isEqualIgnoreOrder(_metricFieldSpecs, that._metricFieldSpecs) && EqualityUtils
-        .isEqual(_timeFieldSpec, that._timeFieldSpec) && EqualityUtils
         .isEqualIgnoreOrder(_dateTimeFieldSpecs, that._dateTimeFieldSpecs);
   }
 
@@ -562,8 +574,7 @@ public final class Schema {
    */
 
   public boolean isBackwardCompatibleWith(Schema oldSchema) {
-    if (!EqualityUtils.isEqual(_timeFieldSpec, oldSchema.getTimeFieldSpec()) || !EqualityUtils
-        .isEqual(_dateTimeFieldSpecs, oldSchema.getDateTimeFieldSpecs())) {
+    if (!EqualityUtils.isEqual(_dateTimeFieldSpecs, oldSchema.getDateTimeFieldSpecs())) {
       return false;
     }
     for (Map.Entry<String, FieldSpec> entry : oldSchema.getFieldSpecMap().entrySet()) {
@@ -582,7 +593,6 @@ public final class Schema {
     int result = EqualityUtils.hashCodeOf(_schemaName);
     result = EqualityUtils.hashCodeOf(result, _dimensionFieldSpecs);
     result = EqualityUtils.hashCodeOf(result, _metricFieldSpecs);
-    result = EqualityUtils.hashCodeOf(result, _timeFieldSpec);
     result = EqualityUtils.hashCodeOf(result, _dateTimeFieldSpecs);
     return result;
   }
@@ -623,7 +633,8 @@ public final class Schema {
       int incomingTimeSize = incomingGranularitySpec.getTimeUnitSize();
       TimeUnit incomingTimeUnit = incomingGranularitySpec.getTimeType();
       String incomingTimeFormat = incomingGranularitySpec.getTimeFormat();
-      Preconditions.checkState(incomingTimeFormat.equals(DateTimeFieldSpec.TimeFormat.EPOCH.toString()) && outgoingTimeFormat
+      Preconditions.checkState(
+          incomingTimeFormat.equals(DateTimeFieldSpec.TimeFormat.EPOCH.toString()) && outgoingTimeFormat
               .equals(DateTimeFieldSpec.TimeFormat.EPOCH.toString()),
           "Conversion from incoming to outgoing is not supported for SIMPLE_DATE_FORMAT");
       String transformFunction =

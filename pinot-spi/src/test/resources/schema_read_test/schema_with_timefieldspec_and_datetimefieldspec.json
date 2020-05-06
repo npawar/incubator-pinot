@@ -1,0 +1,31 @@
+{
+  "dimensionFieldSpecs": [
+    {
+      "name": "dim1",
+      "dataType": "STRING"
+    }
+  ],
+  "timeFieldSpec": {
+    "incomingGranularitySpec": {
+      "dataType": "LONG",
+      "timeType": "MILLISECONDS",
+      "name": "original"
+    }
+  },
+  "dateTimeFieldSpecs": [
+    {
+      "name": "new_time_1",
+      "dataType": "LONG",
+      "format": "1:HOURS:EPOCH",
+      "granularity": "1:HOURS",
+      "transformFunction": "toEpochHours(original)"
+    },
+    {
+      "name": "new_time_2",
+      "dataType": "STRING",
+      "format": "1:HOURS:SIMPLE_DATE_FORMAT:yyyyMMddHH",
+      "granularity": "1:HOURS"
+    }
+  ],
+  "schemaName": "schemaTest"
+}

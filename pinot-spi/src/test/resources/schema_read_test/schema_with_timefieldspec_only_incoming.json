@@ -1,0 +1,16 @@
+{
+  "dimensionFieldSpecs": [
+    {
+      "name": "dim1",
+      "dataType": "STRING"
+    }
+  ],
+  "timeFieldSpec": {
+    "incomingGranularitySpec": {
+      "dataType": "LONG",
+      "timeType": "MILLISECONDS",
+      "name": "time"
+    }
+  },
+  "schemaName": "schemaTest"
+}

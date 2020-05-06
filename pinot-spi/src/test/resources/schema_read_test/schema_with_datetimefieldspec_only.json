@@ -1,0 +1,24 @@
+{
+  "dimensionFieldSpecs": [
+    {
+      "name": "dim1",
+      "dataType": "STRING"
+    }
+  ],
+  "dateTimeFieldSpecs": [
+    {
+      "name": "time2",
+      "dataType": "LONG",
+      "format": "1:SECONDS:EPOCH",
+      "granularity": "15:MINUTES",
+      "transformFunction": "toEpochSeconds(time1)"
+    },
+    {
+      "name": "time1",
+      "dataType": "LONG",
+      "format": "1:MILLISECONDS:EPOCH",
+      "granularity": "15:MINUTES"
+    }
+  ],
+  "schemaName": "schemaTest"
+}

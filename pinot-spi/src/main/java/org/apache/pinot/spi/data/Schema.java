@@ -55,8 +55,8 @@ import org.slf4j.LoggerFactory;
  * <code>DataType</code>s will be converted to one of them.
  *
  * NOTE: TIME is no longer a schema field type https://github.com/apache/incubator-pinot/issues/2756
- * TIME will be treated as DATE_TIME. All methods relate to TimeFieldSpec have been deprecated.
- * Eventually, we will delete TIME
+ * TimeFieldSpec will be treated as DateTimeFieldSpec during deserialization. TimeFieldSpec will never be serialized
+ * Eventually, we will delete TimeFieldSpec.
  */
 @SuppressWarnings("unused")
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -66,7 +66,6 @@ public final class Schema {
   private String _schemaName;
   private final List<DimensionFieldSpec> _dimensionFieldSpecs = new ArrayList<>();
   private final List<MetricFieldSpec> _metricFieldSpecs = new ArrayList<>();
-  private TimeFieldSpec _timeFieldSpec;
   private final List<DateTimeFieldSpec> _dateTimeFieldSpecs = new ArrayList<>();
 
   // Json ignored fields
@@ -74,6 +73,7 @@ public final class Schema {
   private transient final List<String> _dimensionNames = new ArrayList<>();
   private transient final List<String> _metricNames = new ArrayList<>();
   private transient final List<String> _dateTimeNames = new ArrayList<>();
+  private transient String _timeFieldSpecColumnName = null ;
 
   public static Schema fromFile(File schemaFile)
       throws IOException {
@@ -145,24 +145,19 @@ public final class Schema {
    */
   @Deprecated
   public void setDateTimeFieldSpecs(List<DateTimeFieldSpec> dateTimeFieldSpecs) {
-    if (_timeFieldSpec == null) {
+    if (_timeFieldSpecColumnName == null) {
       Preconditions
           .checkState(_dateTimeFieldSpecs.isEmpty(), "Cannot define multiple 'dateTimeFieldSpecs' arrays in schema");
     } else {
       Preconditions
-          .checkState(_dateTimeFieldSpecs.size() == 1 && _dateTimeNames.get(0).equals(_timeFieldSpec.getName()),
+          .checkState(_dateTimeFieldSpecs.size() == 1 && _dateTimeNames.get(0).equals(_timeFieldSpecColumnName),
               "Found unexpected column in 'dateTimeFieldSpecs'. Expected only converted 'timeFieldSpec' "
-                  + _timeFieldSpec.getName() + "but found [" + _dateTimeNames + "]");
+                  + _timeFieldSpecColumnName + "but found [" + _dateTimeNames + "]");
     }
 
     for (DateTimeFieldSpec dateTimeFieldSpec : dateTimeFieldSpecs) {
       addField(dateTimeFieldSpec);
     }
-  }
-
-  @Deprecated
-  public TimeFieldSpec getTimeFieldSpec() {
-    return null;
   }
 
   /**
@@ -194,9 +189,9 @@ public final class Schema {
         _metricFieldSpecs.add((MetricFieldSpec) fieldSpec);
         break;
       case TIME:
-        _timeFieldSpec = (TimeFieldSpec) fieldSpec;
+        _timeFieldSpecColumnName = columnName;
         // convert it to DateTimeFieldSpec.
-        DateTimeFieldSpec dateTimeFieldSpec = convertToDateTimeFieldSpec(_timeFieldSpec);
+        DateTimeFieldSpec dateTimeFieldSpec = convertToDateTimeFieldSpec((TimeFieldSpec) fieldSpec);
         _dateTimeNames.add(columnName);
         _dateTimeFieldSpecs.add(dateTimeFieldSpec);
         fieldSpec = dateTimeFieldSpec;
@@ -237,8 +232,8 @@ public final class Schema {
           index = _dateTimeNames.indexOf(columnName);
           _dateTimeNames.remove(index);
           _dateTimeFieldSpecs.remove(index);
-          if (_timeFieldSpec != null && _timeFieldSpec.getName().equals(columnName)) {
-            _timeFieldSpec = null;
+          if (columnName.equals(_timeFieldSpecColumnName)) {
+            _timeFieldSpecColumnName = null;
           }
           break;
         default:

@@ -323,7 +323,6 @@ public class DateTimeFieldSpecUtilsTest {
   @Test(dataProvider = "schemaDataProvider")
   public void testSchemaReadWrite(Schema schema, List<DateTimeFieldSpec> expectedDateTimeFieldSpecs) {
     // read the schema - shouldn't see timeFieldSpec
-    Assert.assertNull(schema.getTimeFieldSpec());
     Assert.assertEquals(schema.getDateTimeNames().size(), expectedDateTimeFieldSpecs.size());
     for (int i = 0; i < expectedDateTimeFieldSpecs.size(); i++) {
       DateTimeFieldSpec actualDateTimeFieldSpec = schema.getDateTimeFieldSpecs().get(i);

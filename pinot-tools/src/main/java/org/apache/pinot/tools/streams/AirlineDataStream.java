@@ -124,9 +124,9 @@ public class AirlineDataStream {
               message.put(spec.getName(), record.get(spec.getName()));
             }
 
-            TimeFieldSpec spec = pinotSchema.getTimeFieldSpec();
-            String timeColumn = spec.getIncomingTimeColumnName();
-            message.put(timeColumn, currentTimeValue);
+            for (FieldSpec spec : pinotSchema.getDateTimeFieldSpecs()) {
+              message.put(spec.getName(), currentTimeValue);
+            }
 
             try {
               publish(message);

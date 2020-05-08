@@ -127,15 +127,17 @@ public class SchemaTest {
     Assert.assertEquals(metricFieldSpec.isSingleValueField(), true);
     Assert.assertEquals(metricFieldSpec.getDefaultNullValue(), 5);
 
-    TimeFieldSpec timeFieldSpec = schema.getTimeFieldSpec();
-    Assert.assertNotNull(timeFieldSpec);
-    Assert.assertEquals(timeFieldSpec.getFieldType(), FieldSpec.FieldType.TIME);
-    Assert.assertEquals(timeFieldSpec.getName(), "time");
-    Assert.assertEquals(timeFieldSpec.getDataType(), FieldSpec.DataType.LONG);
-    Assert.assertEquals(timeFieldSpec.isSingleValueField(), true);
-    Assert.assertEquals(timeFieldSpec.getDefaultNullValue(), Long.MIN_VALUE);
+    DateTimeFieldSpec dateTimeFieldSpec = schema.getDateTimeSpec("time");
+    Assert.assertNotNull(dateTimeFieldSpec);
+    Assert.assertEquals(dateTimeFieldSpec.getFieldType(), FieldSpec.FieldType.DATE_TIME);
+    Assert.assertEquals(dateTimeFieldSpec.getName(), "time");
+    Assert.assertEquals(dateTimeFieldSpec.getDataType(), FieldSpec.DataType.LONG);
+    Assert.assertEquals(dateTimeFieldSpec.isSingleValueField(), true);
+    Assert.assertEquals(dateTimeFieldSpec.getDefaultNullValue(), Long.MIN_VALUE);
+    Assert.assertEquals(dateTimeFieldSpec.getFormat(), "1:DAYS:EPOCH");
+    Assert.assertEquals(dateTimeFieldSpec.getGranularity(), "1:DAYS");
 
-    DateTimeFieldSpec dateTimeFieldSpec = schema.getDateTimeSpec("dateTime");
+    dateTimeFieldSpec = schema.getDateTimeSpec("dateTime");
     Assert.assertNotNull(dateTimeFieldSpec);
     Assert.assertEquals(dateTimeFieldSpec.getFieldType(), FieldSpec.FieldType.DATE_TIME);
     Assert.assertEquals(dateTimeFieldSpec.getName(), "dateTime");
@@ -166,14 +168,14 @@ public class SchemaTest {
         .addTime(incomingTimeGranularitySpec, outgoingTimeGranularitySpec).build();
     Schema schema12 = new Schema.SchemaBuilder().setSchemaName("testSchema").build();
     schema12.addField(new TimeFieldSpec(incomingTimeGranularitySpec, outgoingTimeGranularitySpec, defaultNullValue));
-    Assert.assertNotNull(schema11.getTimeFieldSpec());
-    Assert.assertNotNull(schema12.getTimeFieldSpec());
+    Assert.assertNotNull(schema11.getDateTimeSpec("outgoing"));
+    Assert.assertNotNull(schema12.getDateTimeSpec("outgoing"));
 
     // Before adding default null value.
     Assert.assertNotEquals(schema12, schema11);
 
     // After adding default null value.
-    schema11.getTimeFieldSpec().setDefaultNullValue(defaultNullValue);
+    schema11.getDateTimeSpec("outgoing").setDefaultNullValue(defaultNullValue);
     Assert.assertEquals(schema11, schema12);
   }
 

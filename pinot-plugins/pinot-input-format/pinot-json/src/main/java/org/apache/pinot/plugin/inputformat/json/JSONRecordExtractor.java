@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
 import org.apache.pinot.spi.data.readers.GenericRow;
+import org.apache.pinot.spi.data.readers.GenericRowWrapper;
 import org.apache.pinot.spi.data.readers.RecordExtractor;
 import org.apache.pinot.spi.data.readers.RecordExtractorConfig;
 
@@ -34,25 +35,40 @@ import org.apache.pinot.spi.data.readers.RecordExtractorConfig;
 public class JSONRecordExtractor implements RecordExtractor<Map<String, Object>> {
 
   private Set<String> _fields;
+  private boolean _flatten;
 
   @Override
   public void init(Set<String> fields, @Nullable RecordExtractorConfig recordExtractorConfig) {
     _fields = fields;
+    _flatten = true; // set this based on flattenSpec in recordExtractorConfig
   }
 
   @Override
-  public GenericRow extract(Map<String, Object> from, GenericRow to) {
-    for (String fieldName : _fields) {
-      Object value = from.get(fieldName);
-      // NOTE about JSON behavior - cannot distinguish between INT/LONG and FLOAT/DOUBLE.
-      // DataTypeTransformer fixes it.
-      Object convertedValue;
-      if (value instanceof Collection) {
-        convertedValue = convertMultiValue((Collection) value);
-      } else {
-        convertedValue = convertSingleValue(value);
+  public GenericRowWrapper extract(Map<String, Object> from, GenericRowWrapper to) {
+    if (_flatten) {
+      // multiple GenericRow are generated
+      int numRecordsAfterFlattening = 3; // based on the JsonPath in flattenSpec, we will get an array of objects
+      for (int i =0; i < numRecordsAfterFlattening; i++) {
+        GenericRow genericRow = to.getReusableGenericRow();
+        for (String field : _fields) {
+          genericRow.putValue(field, "test");
+        }
+        to.add(genericRow);
       }
-      to.putValue(fieldName, convertedValue);
+    } else {
+      GenericRow genericRow = to.getGenericRow();
+      for (String fieldName : _fields) {
+        Object value = from.get(fieldName);
+        // NOTE about JSON behavior - cannot distinguish between INT/LONG and FLOAT/DOUBLE.
+        // DataTypeTransformer fixes it.
+        Object convertedValue;
+        if (value instanceof Collection) {
+          convertedValue = convertMultiValue((Collection) value);
+        } else {
+          convertedValue = convertSingleValue(value);
+        }
+        genericRow.putValue(fieldName, convertedValue);
+      }
     }
     return to;
   }

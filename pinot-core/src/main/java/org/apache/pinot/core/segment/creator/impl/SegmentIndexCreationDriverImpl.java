@@ -57,6 +57,7 @@ import org.apache.pinot.spi.data.FieldSpec;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.spi.data.readers.FileFormat;
 import org.apache.pinot.spi.data.readers.GenericRow;
+import org.apache.pinot.spi.data.readers.GenericRowWrapper;
 import org.apache.pinot.spi.data.readers.RecordReader;
 import org.apache.pinot.spi.data.readers.RecordReaderFactory;
 import org.slf4j.Logger;
@@ -175,18 +176,24 @@ public class SegmentIndexCreationDriverImpl implements SegmentIndexCreationDrive
       // Build the index
       recordReader.rewind();
       LOGGER.info("Start building IndexCreator!");
-      GenericRow reuse = new GenericRow();
+      GenericRowWrapper reuse = new GenericRowWrapper();
       while (recordReader.hasNext()) {
         long start = System.currentTimeMillis();
         reuse.clear();
-        GenericRow transformedRow = _recordTransformer.transform(recordReader.next(reuse));
+        GenericRowWrapper next = recordReader.next(reuse);
+        List<GenericRow> transformedRows = new ArrayList<>(next.size());
+        for (GenericRow genericRow : next.getGenericRows()) {
+          transformedRows.add(_recordTransformer.transform(genericRow));
+        }
         long stop = System.currentTimeMillis();
         totalRecordReadTime += (stop - start);
-        if (transformedRow != null) {
-          indexCreator.indexRow(transformedRow);
-          long stop1 = System.currentTimeMillis();
-          totalIndexTime += (stop1 - stop);
+        for (GenericRow transformedRow : transformedRows) {
+          if (transformedRow != null) {
+            indexCreator.indexRow(transformedRow);
+          }
         }
+        long stop1 = System.currentTimeMillis();
+        totalIndexTime += (stop1 - stop);
       }
     } catch (Exception e) {
       indexCreator.close();

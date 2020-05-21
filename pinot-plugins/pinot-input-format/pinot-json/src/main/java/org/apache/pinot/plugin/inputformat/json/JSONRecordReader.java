@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
 import org.apache.pinot.spi.data.readers.GenericRow;
+import org.apache.pinot.spi.data.readers.GenericRowWrapper;
 import org.apache.pinot.spi.data.readers.RecordReader;
 import org.apache.pinot.spi.data.readers.RecordReaderConfig;
 import org.apache.pinot.spi.utils.JsonUtils;
@@ -71,12 +72,12 @@ public class JSONRecordReader implements RecordReader {
   }
 
   @Override
-  public GenericRow next() {
-    return next(new GenericRow());
+  public GenericRowWrapper next() {
+    return next(new GenericRowWrapper());
   }
 
   @Override
-  public GenericRow next(GenericRow reuse) {
+  public GenericRowWrapper next(GenericRowWrapper reuse) {
     Map<String, Object> record = _iterator.next();
     _recordExtractor.extract(record, reuse);
     return reuse;

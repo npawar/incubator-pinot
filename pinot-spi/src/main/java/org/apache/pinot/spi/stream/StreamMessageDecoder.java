@@ -23,6 +23,7 @@ import java.util.Set;
 import org.apache.pinot.spi.annotations.InterfaceAudience;
 import org.apache.pinot.spi.annotations.InterfaceStability;
 import org.apache.pinot.spi.data.readers.GenericRow;
+import org.apache.pinot.spi.data.readers.GenericRowWrapper;
 
 
 /**
@@ -52,7 +53,7 @@ public interface StreamMessageDecoder<T> {
    * @param payload The buffer from which to read the row.
    * @return A new row decoded from the buffer
    */
-  GenericRow decode(T payload, GenericRow destination);
+  GenericRowWrapper decode(T payload, GenericRowWrapper destination);
 
   /**
    * Decodes a row.
@@ -63,5 +64,5 @@ public interface StreamMessageDecoder<T> {
    * @param destination The {@link GenericRow} to write the decoded row into
    * @return A new row decoded from the buffer
    */
-  GenericRow decode(T payload, int offset, int length, GenericRow destination);
+  GenericRowWrapper decode(T payload, int offset, int length, GenericRowWrapper destination);
 }

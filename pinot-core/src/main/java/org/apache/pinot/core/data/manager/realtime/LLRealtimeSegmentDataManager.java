@@ -65,6 +65,7 @@ import org.apache.pinot.spi.config.table.SegmentPartitionConfig;
 import org.apache.pinot.spi.config.table.TableConfig;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.spi.data.readers.GenericRow;
+import org.apache.pinot.spi.data.readers.GenericRowWrapper;
 import org.apache.pinot.spi.stream.MessageBatch;
 import org.apache.pinot.spi.stream.PartitionLevelConsumer;
 import org.apache.pinot.spi.stream.PartitionLevelStreamConfig;
@@ -429,7 +430,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
     int streamMessageCount = 0;
     boolean canTakeMore = true;
 
-    GenericRow reuse = new GenericRow();
+    GenericRowWrapper reuse = new GenericRowWrapper();
     for (int index = 0; index < messagesAndOffsets.getMessageCount(); index++) {
       if (_shouldStop || endCriteriaReached()) {
         break;
@@ -461,26 +462,26 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
       // this can be overridden by the decoder if there is a better indicator in the message payload
       RowMetadata msgMetadata = messagesAndOffsets.getMetadataAtIndex(index);
 
-      GenericRow decodedRow = _messageDecoder
+      GenericRowWrapper decodedRowWrapper = _messageDecoder
           .decode(messagesAndOffsets.getMessageAtIndex(index), messagesAndOffsets.getMessageOffsetAtIndex(index),
               messagesAndOffsets.getMessageLengthAtIndex(index), reuse);
-      if (decodedRow != null) {
+      if (decodedRowWrapper != null) {
         try {
-          GenericRow transformedRow = _recordTransformer.transform(decodedRow);
-
-          if (transformedRow != null) {
-            realtimeRowsConsumedMeter = _serverMetrics
-                .addMeteredTableValue(_metricKeyName, ServerMeter.REALTIME_ROWS_CONSUMED, 1, realtimeRowsConsumedMeter);
-            indexedMessageCount++;
-          } else {
-            realtimeRowsDroppedMeter = _serverMetrics
-                .addMeteredTableValue(_metricKeyName, ServerMeter.INVALID_REALTIME_ROWS_DROPPED, 1,
-                    realtimeRowsDroppedMeter);
+          for (GenericRow decodedRow : decodedRowWrapper.getGenericRows()) {
+            GenericRow transformedRow = _recordTransformer.transform(decodedRow);
+            if (transformedRow != null) {
+              realtimeRowsConsumedMeter = _serverMetrics
+                  .addMeteredTableValue(_metricKeyName, ServerMeter.REALTIME_ROWS_CONSUMED, 1, realtimeRowsConsumedMeter);
+              indexedMessageCount++;
+            } else {
+              realtimeRowsDroppedMeter = _serverMetrics
+                  .addMeteredTableValue(_metricKeyName, ServerMeter.INVALID_REALTIME_ROWS_DROPPED, 1,
+                      realtimeRowsDroppedMeter);
+            }
+            canTakeMore = _realtimeSegment.index(transformedRow, msgMetadata);
           }
-
-          canTakeMore = _realtimeSegment.index(transformedRow, msgMetadata);
         } catch (Exception e) {
-          segmentLogger.error("Caught exception while transforming the record: {}", decodedRow, e);
+          segmentLogger.error("Caught exception while transforming the record: {}", decodedRowWrapper, e);
           _numRowsErrored++;
         }
       } else {

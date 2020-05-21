@@ -51,14 +51,14 @@ public interface RecordReader extends Closeable {
   /**
    * Get the next record.
    */
-  GenericRow next()
+  GenericRowWrapper next()
       throws IOException;
 
   /**
    * Get the next record. Re-use the given row if possible to reduce garbage.
    * <p>The passed in row should be returned by previous call to {@link #next()}.
    */
-  GenericRow next(GenericRow reuse)
+  GenericRowWrapper next(GenericRowWrapper reuse)
       throws IOException;
 
   /**

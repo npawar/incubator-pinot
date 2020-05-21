@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import org.apache.pinot.spi.data.readers.GenericRow;
+import org.apache.pinot.spi.data.readers.GenericRowWrapper;
 import org.apache.pinot.spi.data.readers.RecordExtractor;
 import org.apache.pinot.spi.plugin.PluginManager;
 import org.apache.pinot.spi.stream.StreamMessageDecoder;
@@ -59,7 +60,7 @@ public class KafkaJSONMessageDecoder implements StreamMessageDecoder<byte[]> {
   }
 
   @Override
-  public GenericRow decode(byte[] payload, GenericRow destination) {
+  public GenericRowWrapper decode(byte[] payload, GenericRowWrapper destination) {
     try {
       JsonNode message = JsonUtils.bytesToJsonNode(payload);
       Map<String, Object> from = OBJECT_MAPPER.convertValue(message, new TypeReference<Map<String, Object>>() {
@@ -73,7 +74,7 @@ public class KafkaJSONMessageDecoder implements StreamMessageDecoder<byte[]> {
   }
 
   @Override
-  public GenericRow decode(byte[] payload, int offset, int length, GenericRow destination) {
+  public GenericRowWrapper decode(byte[] payload, int offset, int length, GenericRowWrapper destination) {
     return decode(Arrays.copyOfRange(payload, offset, offset + length), destination);
   }
 }

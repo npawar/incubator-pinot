@@ -42,5 +42,5 @@ public interface RecordExtractor<T> {
    * @param to The output GenericRow
    * @return The output GenericRow
    */
-  GenericRow extract(T from, GenericRow to);
+  GenericRowWrapper extract(T from, GenericRowWrapper to);
 }

@@ -56,7 +56,7 @@ public class JSONRecordExtractor implements RecordExtractor<Map<String, Object>>
         to.add(genericRow);
       }
     } else {
-      GenericRow genericRow = to.getGenericRow();
+      GenericRow genericRow = to.getReusableGenericRow();
       for (String fieldName : _fields) {
         Object value = from.get(fieldName);
         // NOTE about JSON behavior - cannot distinguish between INT/LONG and FLOAT/DOUBLE.
@@ -69,6 +69,7 @@ public class JSONRecordExtractor implements RecordExtractor<Map<String, Object>>
         }
         genericRow.putValue(fieldName, convertedValue);
       }
+      to.add(genericRow);
     }
     return to;
   }

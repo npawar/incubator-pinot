@@ -22,12 +22,10 @@ public class GenericRowWrapper {
     return _genericRows.size();
   }
 
-  public void add(GenericRow genericRow) {
-    _genericRows.add(genericRow);
-  }
-
   public GenericRow getReusableGenericRow() {
-    return _genericRowPool.acquireReusable();
+    GenericRow reusableGenericRow = _genericRowPool.acquireReusable();
+    _genericRows.add(reusableGenericRow);
+    return reusableGenericRow;
   }
 
   public List<GenericRow> getGenericRows() {

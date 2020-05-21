@@ -53,7 +53,6 @@ public class JSONRecordExtractor implements RecordExtractor<Map<String, Object>>
         for (String field : _fields) {
           genericRow.putValue(field, "test");
         }
-        to.add(genericRow);
       }
     } else {
       GenericRow genericRow = to.getReusableGenericRow();
@@ -69,7 +68,6 @@ public class JSONRecordExtractor implements RecordExtractor<Map<String, Object>>
         }
         genericRow.putValue(fieldName, convertedValue);
       }
-      to.add(genericRow);
     }
     return to;
   }

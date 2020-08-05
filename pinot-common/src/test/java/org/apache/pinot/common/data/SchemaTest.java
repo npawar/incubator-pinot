@@ -19,7 +19,9 @@
 package org.apache.pinot.common.data;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URL;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.apache.pinot.common.utils.SchemaUtils;
 import org.apache.pinot.spi.data.DateTimeFieldSpec;
@@ -137,23 +139,27 @@ public class SchemaTest {
     Assert.assertTrue(metricFieldSpec.isSingleValueField());
     Assert.assertEquals(metricFieldSpec.getDefaultNullValue(), 5);
 
-    TimeFieldSpec timeFieldSpec = schema.getTimeFieldSpec();
-    Assert.assertNotNull(timeFieldSpec);
-    Assert.assertEquals(timeFieldSpec.getFieldType(), FieldSpec.FieldType.TIME);
-    Assert.assertEquals(timeFieldSpec.getName(), "time");
-    Assert.assertEquals(timeFieldSpec.getDataType(), FieldSpec.DataType.LONG);
-    Assert.assertTrue(timeFieldSpec.isSingleValueField());
-    Assert.assertEquals(timeFieldSpec.getDefaultNullValue(), Long.MIN_VALUE);
+    List<DateTimeFieldSpec> dateTimeFieldSpecs = schema.getDateTimeFieldSpecs();
+    Assert.assertEquals(dateTimeFieldSpecs.size(), 2);
+    DateTimeFieldSpec dateTimeFieldSpec1 = schema.getDateTimeSpec("time");
+    Assert.assertNotNull(dateTimeFieldSpec1);
+    Assert.assertEquals(dateTimeFieldSpec1.getFieldType(), FieldSpec.FieldType.DATE_TIME);
+    Assert.assertEquals(dateTimeFieldSpec1.getName(), "time");
+    Assert.assertEquals(dateTimeFieldSpec1.getDataType(), FieldSpec.DataType.LONG);
+    Assert.assertTrue(dateTimeFieldSpec1.isSingleValueField());
+    Assert.assertEquals(dateTimeFieldSpec1.getDefaultNullValue(), Long.MIN_VALUE);
+    Assert.assertEquals(dateTimeFieldSpec1.getFormat(), "1:DAYS:EPOCH");
+    Assert.assertEquals(dateTimeFieldSpec1.getGranularity(), "1:DAYS");
 
-    DateTimeFieldSpec dateTimeFieldSpec = schema.getDateTimeSpec("dateTime");
-    Assert.assertNotNull(dateTimeFieldSpec);
-    Assert.assertEquals(dateTimeFieldSpec.getFieldType(), FieldSpec.FieldType.DATE_TIME);
-    Assert.assertEquals(dateTimeFieldSpec.getName(), "dateTime");
-    Assert.assertEquals(dateTimeFieldSpec.getDataType(), FieldSpec.DataType.LONG);
-    Assert.assertTrue(dateTimeFieldSpec.isSingleValueField());
-    Assert.assertEquals(dateTimeFieldSpec.getDefaultNullValue(), Long.MIN_VALUE);
-    Assert.assertEquals(dateTimeFieldSpec.getFormat(), "1:HOURS:EPOCH");
-    Assert.assertEquals(dateTimeFieldSpec.getGranularity(), "1:HOURS");
+    DateTimeFieldSpec dateTimeFieldSpec2 = schema.getDateTimeSpec("dateTime");
+    Assert.assertNotNull(dateTimeFieldSpec2);
+    Assert.assertEquals(dateTimeFieldSpec2.getFieldType(), FieldSpec.FieldType.DATE_TIME);
+    Assert.assertEquals(dateTimeFieldSpec2.getName(), "dateTime");
+    Assert.assertEquals(dateTimeFieldSpec2.getDataType(), FieldSpec.DataType.LONG);
+    Assert.assertTrue(dateTimeFieldSpec2.isSingleValueField());
+    Assert.assertEquals(dateTimeFieldSpec2.getDefaultNullValue(), Long.MIN_VALUE);
+    Assert.assertEquals(dateTimeFieldSpec2.getFormat(), "1:HOURS:EPOCH");
+    Assert.assertEquals(dateTimeFieldSpec2.getGranularity(), "1:HOURS");
   }
 
   @Test
@@ -206,8 +212,15 @@ public class SchemaTest {
         .addTime(incomingTimeGranularitySpec, null).build();
     Schema schema12 = new Schema.SchemaBuilder().setSchemaName("testSchema").build();
     schema12.addField(new TimeFieldSpec(incomingTimeGranularitySpec, outgoingTimeGranularitySpec));
-    Assert.assertNotNull(schema11.getTimeFieldSpec());
-    Assert.assertNotNull(schema12.getTimeFieldSpec());
+    Assert.assertEquals(schema11.getDateTimeFieldSpecs().size(), 1);
+    Assert.assertNotNull(schema11.getDateTimeFieldSpecs().get(0));
+    Assert.assertEquals(schema12.getDateTimeFieldSpecs().size(), 1);
+    Assert.assertNotNull(schema12.getDateTimeFieldSpecs().get(0));
+    Assert.assertEquals(schema12.getDateTimeFieldSpecs().get(0).getName(), outgoingName);
+    Assert.assertEquals(schema12.getDateTimeFieldSpecs().get(0).getDataType(), outgoingDataType);
+    Assert.assertEquals(schema12.getDateTimeFieldSpecs().get(0).getFormat(), "1:DAYS:EPOCH");
+    Assert.assertEquals(schema12.getDateTimeFieldSpecs().get(0).getGranularity(), "1:DAYS");
+    Assert.assertEquals(schema12.getDateTimeFieldSpecs().get(0).getTransformFunction(), "toEpochDays(fromEpochHours(incoming))");
 
     Assert.assertNotEquals(schema12, schema11);
 

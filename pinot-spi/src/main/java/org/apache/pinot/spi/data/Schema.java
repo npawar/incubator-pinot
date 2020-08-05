@@ -20,6 +20,7 @@ package org.apache.pinot.spi.data;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -54,6 +55,10 @@ import org.slf4j.LoggerFactory;
  * <p>There could be multiple DIMENSION or METRIC or DATE_TIME fields, but at most 1 TIME field.
  * <p>In pinot, we store data using 5 <code>DataType</code>s: INT, LONG, FLOAT, DOUBLE, STRING. All other
  * <code>DataType</code>s will be converted to one of them.
+ *
+ * NOTE: TIME is no longer treated as a schema field type https://github.com/apache/incubator-pinot/issues/2756
+ * TimeFieldSpec will be converted to DateTimeFieldSpec during deserialization. Schema object will never have TimeFieldSpec. TimeFieldSpec is ignored during serialization.
+ * Eventually, we will delete TimeFieldSpec.
  */
 @SuppressWarnings("unused")
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -63,7 +68,6 @@ public final class Schema {
   private String _schemaName;
   private final List<DimensionFieldSpec> _dimensionFieldSpecs = new ArrayList<>();
   private final List<MetricFieldSpec> _metricFieldSpecs = new ArrayList<>();
-  private TimeFieldSpec _timeFieldSpec;
   private final List<DateTimeFieldSpec> _dateTimeFieldSpecs = new ArrayList<>();
   private final List<ComplexFieldSpec> _complexFieldSpecs = new ArrayList<>();
 
@@ -72,6 +76,7 @@ public final class Schema {
   private transient final List<String> _dimensionNames = new ArrayList<>();
   private transient final List<String> _metricNames = new ArrayList<>();
   private transient final List<String> _dateTimeNames = new ArrayList<>();
+  private transient String _timeFieldSpecNameInternal = null;
 
   public static Schema fromFile(File schemaFile)
       throws IOException {
@@ -143,20 +148,20 @@ public final class Schema {
    */
   @Deprecated
   public void setDateTimeFieldSpecs(List<DateTimeFieldSpec> dateTimeFieldSpecs) {
-    Preconditions.checkState(_dateTimeFieldSpecs.isEmpty());
+    Preconditions.checkState(
+        _dateTimeFieldSpecs.isEmpty() || (_dateTimeFieldSpecs.size() == 1 && _dateTimeFieldSpecs.get(0).getName()
+            .equals(_timeFieldSpecNameInternal)));
 
     for (DateTimeFieldSpec dateTimeFieldSpec : dateTimeFieldSpecs) {
       addField(dateTimeFieldSpec);
     }
   }
 
-  public TimeFieldSpec getTimeFieldSpec() {
-    return _timeFieldSpec;
-  }
-
   /**
    * Required by JSON deserializer. DO NOT USE. DO NOT REMOVE.
    * Adding @Deprecated to prevent usage
+   *
+   * This deserializer converts the TimeFieldSpec to DateTimeFieldSpec.
    */
   @Deprecated
   public void setTimeFieldSpec(TimeFieldSpec timeFieldSpec) {
@@ -183,7 +188,11 @@ public final class Schema {
         _metricFieldSpecs.add((MetricFieldSpec) fieldSpec);
         break;
       case TIME:
-        _timeFieldSpec = (TimeFieldSpec) fieldSpec;
+        _timeFieldSpecNameInternal = columnName;
+        DateTimeFieldSpec dateTimeFieldSpec = convertToDateTimeFieldSpec((TimeFieldSpec) fieldSpec);
+        _dateTimeNames.add(columnName);
+        _dateTimeFieldSpecs.add(dateTimeFieldSpec);
+        fieldSpec = dateTimeFieldSpec;
         break;
       case DATE_TIME:
         _dateTimeNames.add(columnName);
@@ -220,13 +229,13 @@ public final class Schema {
           _metricNames.remove(index);
           _metricFieldSpecs.remove(index);
           break;
-        case TIME:
-          _timeFieldSpec = null;
-          break;
         case DATE_TIME:
           index = _dateTimeNames.indexOf(columnName);
           _dateTimeNames.remove(index);
           _dateTimeFieldSpecs.remove(index);
+          if (columnName.equals(_timeFieldSpecNameInternal)) {
+            _timeFieldSpecNameInternal = null;
+          }
           break;
         default:
           throw new UnsupportedOperationException("Unsupported field type: " + fieldType);
@@ -358,9 +367,6 @@ public final class Schema {
       }
       jsonObject.set("metricFieldSpecs", jsonArray);
     }
-    if (_timeFieldSpec != null) {
-      jsonObject.set("timeFieldSpec", _timeFieldSpec.toJsonObject());
-    }
     if (!_dateTimeFieldSpecs.isEmpty()) {
       ArrayNode jsonArray = JsonUtils.newArrayNode();
       for (DateTimeFieldSpec dateTimeFieldSpec : _dateTimeFieldSpecs) {
@@ -411,7 +417,6 @@ public final class Schema {
       String fieldName = fieldSpec.getName();
       switch (fieldType) {
         case DIMENSION:
-        case TIME:
         case DATE_TIME:
           switch (dataType) {
             case INT:
@@ -423,7 +428,7 @@ public final class Schema {
               break;
             default:
               throw new IllegalStateException(
-                  "Unsupported data type: " + dataType + " in DIMENSION/TIME field: " + fieldName);
+                  "Unsupported data type: " + dataType + " in DIMENSION/DATE_TIME field: " + fieldName);
           }
           break;
         case METRIC:
@@ -516,7 +521,7 @@ public final class Schema {
     /**
      * @deprecated in favor of {@link SchemaBuilder#addDateTime(String, DataType, String, String)}
      * Adds timeFieldSpec with incoming and outgoing granularity spec
-     * This will continue to exist for a while in several tests, as it helps to test backward compatibility of schemas containing TimeFieldSpec
+     * For backward compatibility, we keep this method. The TimeFieldSpec is converted to DateTimeFieldSpec by the addField method
      */
     @Deprecated
     public SchemaBuilder addTime(TimeGranularitySpec incomingTimeGranularitySpec,
@@ -589,7 +594,6 @@ public final class Schema {
     return EqualityUtils.isEqual(_schemaName, that._schemaName) && EqualityUtils
         .isEqualIgnoreOrder(_dimensionFieldSpecs, that._dimensionFieldSpecs) && EqualityUtils
         .isEqualIgnoreOrder(_metricFieldSpecs, that._metricFieldSpecs) && EqualityUtils
-        .isEqual(_timeFieldSpec, that._timeFieldSpec) && EqualityUtils
         .isEqualIgnoreOrder(_dateTimeFieldSpecs, that._dateTimeFieldSpecs);
   }
 
@@ -621,7 +625,6 @@ public final class Schema {
     int result = EqualityUtils.hashCodeOf(_schemaName);
     result = EqualityUtils.hashCodeOf(result, _dimensionFieldSpecs);
     result = EqualityUtils.hashCodeOf(result, _metricFieldSpecs);
-    result = EqualityUtils.hashCodeOf(result, _timeFieldSpec);
     result = EqualityUtils.hashCodeOf(result, _dateTimeFieldSpecs);
     return result;
   }
@@ -633,7 +636,7 @@ public final class Schema {
    *    and configure a transform function for the conversion from incoming
    */
   @VisibleForTesting
-  static DateTimeFieldSpec convertToDateTimeFieldSpec(TimeFieldSpec timeFieldSpec) {
+  public static DateTimeFieldSpec convertToDateTimeFieldSpec(TimeFieldSpec timeFieldSpec) {
     DateTimeFieldSpec dateTimeFieldSpec = new DateTimeFieldSpec();
     TimeGranularitySpec incomingGranularitySpec = timeFieldSpec.getIncomingGranularitySpec();
     TimeGranularitySpec outgoingGranularitySpec = timeFieldSpec.getOutgoingGranularitySpec();

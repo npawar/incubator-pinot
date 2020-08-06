@@ -146,8 +146,11 @@ public class DataGenerator {
         spec = new MetricFieldSpec();
         break;
 
-      case TIME:
-        spec = new TimeFieldSpec(new TimeGranularitySpec(dataType, genSpec.getTimeUnitMap().get(column), column));
+      case DATE_TIME:
+        TimeUnit timeUnit = genSpec.getTimeUnitMap().get(column);
+        spec = new DateTimeFieldSpec(column, dataType,
+            new DateTimeFormatSpec(1, timeUnit.toString(), DateTimeFieldSpec.TimeFormat.EPOCH.toString()).getFormat(),
+            new DateTimeGranularitySpec(1, timeUnit).getGranularity());
         break;
 
       default:

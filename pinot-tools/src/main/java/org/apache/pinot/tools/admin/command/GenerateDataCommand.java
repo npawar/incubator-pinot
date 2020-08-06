@@ -19,6 +19,8 @@
 package org.apache.pinot.tools.admin.command;
 
 import org.apache.commons.lang.math.IntRange;
+import org.apache.pinot.spi.data.DateTimeFieldSpec;
+import org.apache.pinot.spi.data.DateTimeFormatSpec;
 import org.apache.pinot.spi.data.FieldSpec;
 import org.apache.pinot.spi.data.FieldSpec.DataType;
 import org.apache.pinot.spi.data.FieldSpec.FieldType;
@@ -186,9 +188,7 @@ public class GenerateDataCommand extends AbstractBaseAdminCommand implements Com
 
       switch (fs.getFieldType()) {
         case DIMENSION:
-          if (cardinality.get(col) == null) {
-            cardinality.put(col, 1000);
-          }
+          cardinality.putIfAbsent(col, 1000);
           break;
 
         case METRIC:
@@ -197,12 +197,12 @@ public class GenerateDataCommand extends AbstractBaseAdminCommand implements Com
           }
           break;
 
-        case TIME:
+        case DATE_TIME:
           if (!range.containsKey(col)) {
             range.put(col, new IntRange(1, 1000));
           }
-          TimeFieldSpec tfs = (TimeFieldSpec) fs;
-          timeUnits.put(col, tfs.getIncomingGranularitySpec().getTimeType());
+          DateTimeFieldSpec dateTimeFieldSpec = (DateTimeFieldSpec) fs;
+          timeUnits.put(col, new DateTimeFormatSpec(dateTimeFieldSpec.getFormat()).getColumnUnit());
           break;
 
         default:
@@ -221,7 +221,7 @@ public class GenerateDataCommand extends AbstractBaseAdminCommand implements Com
     schemaBuilder.addSingleValueDimension("name", DataType.STRING);
     schemaBuilder.addSingleValueDimension("age", DataType.INT);
     schemaBuilder.addMetric("percent", DataType.FLOAT);
-    schemaBuilder.addTime(new TimeGranularitySpec(DataType.LONG, TimeUnit.DAYS, "days"), null);
+    schemaBuilder.addDateTime("days", DataType.LONG, "1:DAYS:EPOCH", "1:DAYS");
 
     Schema schema = schemaBuilder.build();
     System.out.println(JsonUtils.objectToPrettyString(schema));

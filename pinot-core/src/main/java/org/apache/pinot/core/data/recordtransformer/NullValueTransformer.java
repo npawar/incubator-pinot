@@ -20,6 +20,7 @@ package org.apache.pinot.core.data.recordtransformer;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.pinot.spi.config.table.TableConfig;
 import org.apache.pinot.spi.data.FieldSpec;
 import org.apache.pinot.spi.data.FieldSpec.FieldType;
 import org.apache.pinot.spi.data.Schema;
@@ -29,9 +30,10 @@ import org.apache.pinot.spi.data.readers.GenericRow;
 public class NullValueTransformer implements RecordTransformer {
   private final Map<String, Object> _defaultNullValues = new HashMap<>();
 
-  public NullValueTransformer(Schema schema) {
+  public NullValueTransformer(TableConfig tableConfig, Schema schema) {
+    String timeColumnName = tableConfig.getValidationConfig().getTimeColumnName();
     for (FieldSpec fieldSpec : schema.getAllFieldSpecs()) {
-      if (!fieldSpec.isVirtualColumn() && fieldSpec.getFieldType() != FieldType.TIME) {
+      if (!fieldSpec.isVirtualColumn() && !fieldSpec.getName().equals(timeColumnName)) {
         String fieldName = fieldSpec.getName();
         Object defaultNullValue = fieldSpec.getDefaultNullValue();
         if (fieldSpec.isSingleValueField()) {

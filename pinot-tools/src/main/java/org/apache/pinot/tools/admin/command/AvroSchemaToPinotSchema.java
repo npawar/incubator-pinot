@@ -140,7 +140,7 @@ public class AvroSchemaToPinotSchema extends AbstractBaseAdminCommand implements
       }
     }
     if (_timeColumnName != null) {
-      fieldTypes.put(_timeColumnName, FieldSpec.FieldType.TIME);
+      fieldTypes.put(_timeColumnName, FieldSpec.FieldType.DATE_TIME);
     }
     return fieldTypes;
   }

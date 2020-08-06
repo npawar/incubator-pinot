@@ -30,6 +30,8 @@ import org.apache.pinot.core.data.partition.PartitionFunctionFactory;
 import org.apache.pinot.core.segment.creator.TextIndexType;
 import org.apache.pinot.core.segment.creator.impl.V1Constants;
 import org.apache.pinot.spi.data.DateTimeFieldSpec;
+import org.apache.pinot.spi.data.DateTimeFormatSpec;
+import org.apache.pinot.spi.data.DateTimeGranularitySpec;
 import org.apache.pinot.spi.data.DimensionFieldSpec;
 import org.apache.pinot.spi.data.FieldSpec;
 import org.apache.pinot.spi.data.FieldSpec.DataType;
@@ -398,7 +400,10 @@ public class ColumnMetadata {
         this.fieldSpec = new MetricFieldSpec(columnName, dataType);
         break;
       case TIME:
-        this.fieldSpec = new TimeFieldSpec(new TimeGranularitySpec(dataType, timeUnit, columnName));
+        // TIME field type is deprecated. TIME field will be converted to DATE_TIME when deserializing schema. Therefore, create DateTimeFieldSpec here instead of TimeFieldSpec
+        this.fieldSpec = new DateTimeFieldSpec(columnName, dataType,
+            new DateTimeFormatSpec(1, timeUnit.toString(), DateTimeFieldSpec.TimeFormat.EPOCH.toString()).getFormat(),
+            new DateTimeGranularitySpec(1, timeUnit).getGranularity());
         break;
       case DATE_TIME:
         this.fieldSpec = new DateTimeFieldSpec(columnName, dataType, dateTimeFormat, dateTimeGranularity);
@@ -439,7 +444,7 @@ public class ColumnMetadata {
   }
 
   public FieldType getFieldType() {
-    return fieldType;
+    return fieldType.equals(FieldType.TIME) ? FieldType.DATE_TIME : fieldType;
   }
 
   public boolean isSorted() {

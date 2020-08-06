@@ -166,6 +166,7 @@ public final class Schema {
   @Deprecated
   public void setTimeFieldSpec(TimeFieldSpec timeFieldSpec) {
     if (timeFieldSpec != null) {
+      _timeFieldSpecNameInternal = timeFieldSpec.getName();
       addField(timeFieldSpec);
     }
   }
@@ -188,7 +189,6 @@ public final class Schema {
         _metricFieldSpecs.add((MetricFieldSpec) fieldSpec);
         break;
       case TIME:
-        _timeFieldSpecNameInternal = columnName;
         DateTimeFieldSpec dateTimeFieldSpec = convertToDateTimeFieldSpec((TimeFieldSpec) fieldSpec);
         _dateTimeNames.add(columnName);
         _dateTimeFieldSpecs.add(dateTimeFieldSpec);
@@ -233,9 +233,6 @@ public final class Schema {
           index = _dateTimeNames.indexOf(columnName);
           _dateTimeNames.remove(index);
           _dateTimeFieldSpecs.remove(index);
-          if (columnName.equals(_timeFieldSpecNameInternal)) {
-            _timeFieldSpecNameInternal = null;
-          }
           break;
         default:
           throw new UnsupportedOperationException("Unsupported field type: " + fieldType);

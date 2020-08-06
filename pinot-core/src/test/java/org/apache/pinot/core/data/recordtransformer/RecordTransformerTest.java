@@ -156,7 +156,7 @@ public class RecordTransformerTest {
 
   @Test
   public void testNullValueTransformer() {
-    RecordTransformer transformer = new NullValueTransformer(SCHEMA);
+    RecordTransformer transformer = new NullValueTransformer(TABLE_CONFIG, SCHEMA);
     GenericRow record = new GenericRow();
     for (int i = 0; i < NUM_ROUNDS; i++) {
       record = transformer.transform(record);

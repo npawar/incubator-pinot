@@ -323,12 +323,12 @@ public abstract class FieldSpec implements Comparable<FieldSpec> {
    * The <code>FieldType</code> enum is used to demonstrate the real world business logic for a column.
    * <p><code>DIMENSION</code>: columns used to filter records.
    * <p><code>METRIC</code>: columns used to apply aggregation on. <code>METRIC</code> field only contains numeric data.
-   * <p><code>TIME</code>: time column (at most one per {@link Schema}). <code>TIME</code> field can be used to prune
+   * <p><code>TIME</code>: time column (at most one per {@link Schema}). <code>TIME</code> field can be used to prune. TIME is deprecated. Use DATE_TIME instead.
    * <p><code>DATE_TIME</code>: time column (at most one per {@link Schema}). <code>TIME</code> field can be used to prune
    * segments, otherwise treated the same as <code>DIMENSION</code> field.
    */
   public enum FieldType {
-    DIMENSION, METRIC, TIME, DATE_TIME, COMPLEX
+    DIMENSION, METRIC, @Deprecated TIME, DATE_TIME, COMPLEX
   }
 
   /**

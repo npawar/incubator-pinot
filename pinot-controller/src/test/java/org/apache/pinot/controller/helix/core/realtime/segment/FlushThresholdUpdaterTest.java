@@ -129,7 +129,7 @@ public class FlushThresholdUpdaterTest {
       SegmentSizeBasedFlushThresholdUpdater flushThresholdUpdater = new SegmentSizeBasedFlushThresholdUpdater();
 
       // Start consumption
-      LLCRealtimeSegmentZKMetadata newSegmentZKMetadata = getNewSegmentZKMetadata(0);
+      LLCRealtimeSegmentZKMetadata newSegmentZKMetadata = getNewSegmentZKMetadata("0");
       CommittingSegmentDescriptor committingSegmentDescriptor = getCommittingSegmentDescriptor(0L);
       flushThresholdUpdater
           .updateFlushThreshold(streamConfig, newSegmentZKMetadata, committingSegmentDescriptor, null, 1);
@@ -154,7 +154,7 @@ public class FlushThresholdUpdaterTest {
     }
   }
 
-  private LLCRealtimeSegmentZKMetadata getNewSegmentZKMetadata(int partitionId) {
+  private LLCRealtimeSegmentZKMetadata getNewSegmentZKMetadata(String partitionId) {
     LLCRealtimeSegmentZKMetadata newSegmentZKMetadata = new LLCRealtimeSegmentZKMetadata();
     newSegmentZKMetadata.setSegmentName(
         new LLCSegmentName(RAW_TABLE_NAME, partitionId, 0, System.currentTimeMillis()).getSegmentName());
@@ -192,7 +192,7 @@ public class FlushThresholdUpdaterTest {
     PartitionLevelStreamConfig streamConfig = mockDefaultAutotuneStreamConfig();
 
     // Start consumption
-    LLCRealtimeSegmentZKMetadata newSegmentZKMetadata = getNewSegmentZKMetadata(0);
+    LLCRealtimeSegmentZKMetadata newSegmentZKMetadata = getNewSegmentZKMetadata("0");
     CommittingSegmentDescriptor committingSegmentDescriptor = getCommittingSegmentDescriptor(0L);
     flushThresholdUpdater
         .updateFlushThreshold(streamConfig, newSegmentZKMetadata, committingSegmentDescriptor, null, 1);
@@ -225,7 +225,7 @@ public class FlushThresholdUpdaterTest {
     PartitionLevelStreamConfig streamConfig = mockDefaultAutotuneStreamConfig();
 
     // Start consumption
-    LLCRealtimeSegmentZKMetadata newSegmentZKMetadata = getNewSegmentZKMetadata(0);
+    LLCRealtimeSegmentZKMetadata newSegmentZKMetadata = getNewSegmentZKMetadata("0");
     CommittingSegmentDescriptor committingSegmentDescriptor = getCommittingSegmentDescriptor(0L);
     flushThresholdUpdater
         .updateFlushThreshold(streamConfig, newSegmentZKMetadata, committingSegmentDescriptor, null, 1);
@@ -257,8 +257,8 @@ public class FlushThresholdUpdaterTest {
     PartitionLevelStreamConfig streamConfig = mockDefaultAutotuneStreamConfig();
 
     // Start consumption for 2 partitions
-    LLCRealtimeSegmentZKMetadata newSegmentZKMetadataForPartition0 = getNewSegmentZKMetadata(0);
-    LLCRealtimeSegmentZKMetadata newSegmentZKMetadataForPartition1 = getNewSegmentZKMetadata(1);
+    LLCRealtimeSegmentZKMetadata newSegmentZKMetadataForPartition0 = getNewSegmentZKMetadata("0");
+    LLCRealtimeSegmentZKMetadata newSegmentZKMetadataForPartition1 = getNewSegmentZKMetadata("1");
     CommittingSegmentDescriptor committingSegmentDescriptor = getCommittingSegmentDescriptor(0L);
     flushThresholdUpdater
         .updateFlushThreshold(streamConfig, newSegmentZKMetadataForPartition0, committingSegmentDescriptor, null, 1);
@@ -313,7 +313,7 @@ public class FlushThresholdUpdaterTest {
         mockAutotuneStreamConfig(flushSegmentDesiredSizeBytes, flushThresholdTimeMillis, flushAutotuneInitialRows);
 
     // Start consumption
-    LLCRealtimeSegmentZKMetadata newSegmentZKMetadata = getNewSegmentZKMetadata(0);
+    LLCRealtimeSegmentZKMetadata newSegmentZKMetadata = getNewSegmentZKMetadata("0");
     CommittingSegmentDescriptor committingSegmentDescriptor = getCommittingSegmentDescriptor(0L);
     flushThresholdUpdater
         .updateFlushThreshold(streamConfig, newSegmentZKMetadata, committingSegmentDescriptor, null, 1);

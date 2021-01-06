@@ -78,7 +78,7 @@ public class Server2ControllerSegmentUploaderTest {
     _file = FileUtils.getFile(FileUtils.getTempDirectory(), UUID.randomUUID().toString());
     _file.deleteOnExit();
 
-    _llcSegmentName = new LLCSegmentName("test_REALTIME", 1, 0, System.currentTimeMillis());
+    _llcSegmentName = new LLCSegmentName("test_REALTIME", "1", 0, System.currentTimeMillis());
   }
 
   @AfterClass

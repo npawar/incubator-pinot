@@ -46,8 +46,8 @@ import org.apache.pinot.spi.stream.StreamPartitionMsgOffset;
 public class FakeStreamConsumerFactory extends StreamConsumerFactory {
 
   @Override
-  public PartitionLevelConsumer createPartitionLevelConsumer(String clientId, int partition) {
-    return new FakePartitionLevelConsumer(partition, _streamConfig);
+  public PartitionLevelConsumer createPartitionLevelConsumer(String clientId, String partition) {
+    return new FakePartitionLevelConsumer(Integer.parseInt(partition), _streamConfig);
   }
 
   @Override
@@ -57,7 +57,7 @@ public class FakeStreamConsumerFactory extends StreamConsumerFactory {
   }
 
   @Override
-  public StreamMetadataProvider createPartitionMetadataProvider(String clientId, int partition) {
+  public StreamMetadataProvider createPartitionMetadataProvider(String clientId, String partition) {
     return new FakeStreamMetadataProvider(_streamConfig);
   }
 
@@ -83,7 +83,7 @@ public class FakeStreamConsumerFactory extends StreamConsumerFactory {
     System.out.println(partitionCount);
 
     // Partition metadata provider
-    int partition = 3;
+    String partition = "3";
     StreamMetadataProvider partitionMetadataProvider =
         streamConsumerFactory.createPartitionMetadataProvider(clientId, partition);
     StreamPartitionMsgOffset partitionOffset =

@@ -46,7 +46,6 @@ import static org.mockito.Mockito.*;
 
 
 public class SegmentCompletionTest {
-  private static final String FAKEFS_FINAL_SEGMENT_URI = "fakefs:///final_segment_uri";
   private MockPinotLLCRealtimeSegmentManager segmentManager;
   private MockSegmentCompletionManager segmentCompletionMgr;
   private Map<String, Object> fsmMap;
@@ -88,7 +87,7 @@ public class SegmentCompletionTest {
     final int partitionId = 23;
     final int seqId = 12;
     final long now = System.currentTimeMillis();
-    final LLCSegmentName segmentName = new LLCSegmentName(tableName, partitionId, seqId, now);
+    final LLCSegmentName segmentName = new LLCSegmentName(tableName, String.valueOf(partitionId), seqId, now);
     segmentNameStr = segmentName.getSegmentName();
     final LLCRealtimeSegmentZKMetadata metadata = new LLCRealtimeSegmentZKMetadata();
     metadata.setStatus(CommonConstants.Segment.Realtime.Status.IN_PROGRESS);
@@ -198,7 +197,7 @@ public class SegmentCompletionTest {
   }
 
   @Test
-  public void testStoppedConsumeBeforeHold() throws Exception {
+  public void testStoppedConsumeBeforeHold() {
     SegmentCompletionProtocol.Response response;
     Request.Params params;
     final String reason = "IAmLazy";
@@ -737,8 +736,7 @@ public class SegmentCompletionTest {
     SegmentCompletionProtocol.Response response;
     Request.Params params;
     // s1 sends offset of 20, gets HOLD at t = 5s;
-    final int startTimeSecs = 5;
-    segmentCompletionMgr._seconds = startTimeSecs;
+    segmentCompletionMgr._seconds = 5;
     params = new Request.Params().withInstanceId(s1)
         .withStreamPartitionMsgOffset(s1Offset.toString())
         .withSegmentName(segmentNameStr);
@@ -806,8 +804,7 @@ public class SegmentCompletionTest {
     SegmentCompletionProtocol.Response response;
     Request.Params params;
     // s1 sends offset of 20, gets HOLD at t = 5s;
-    final int startTimeSecs = 5;
-    segmentCompletionMgr._seconds = startTimeSecs;
+    segmentCompletionMgr._seconds = 5;
     params = new Request.Params().withInstanceId(s1)
         .withStreamPartitionMsgOffset(s1Offset.toString())
         .withSegmentName(segmentNameStr);
@@ -868,8 +865,7 @@ public class SegmentCompletionTest {
     SegmentCompletionProtocol.Response response;
     Request.Params params;
     // s1 sends offset of 20, gets HOLD at t = 5s;
-    final int startTimeSecs = 5;
-    segmentCompletionMgr._seconds = startTimeSecs;
+    segmentCompletionMgr._seconds = 5;
     params = new Request.Params().withInstanceId(s1)
         .withStreamPartitionMsgOffset(s1Offset.toString())
         .withSegmentName(segmentNameStr);
@@ -1320,7 +1316,7 @@ public class SegmentCompletionTest {
         .withStreamPartitionMsgOffset(s2Offset.toString())
         .withSegmentName(segmentNameStr);
     response = segmentCompletionMgr.segmentCommitStart(params);
-    Assert.assertTrue(response.getStatus().equals(SegmentCompletionProtocol.ControllerResponseStatus.HOLD));
+    Assert.assertEquals(ControllerResponseStatus.HOLD, response.getStatus());
 
     // So s2 goes back into HOLDING state. s1 and s3 are already holding, so now it will get COMMIT back.
     params = new Request.Params().withInstanceId(s2)

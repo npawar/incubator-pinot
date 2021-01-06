@@ -273,7 +273,7 @@ public class KafkaPartitionLevelConsumerTest {
     int numPartitions =
         new KafkaStreamMetadataProvider(clientId, streamConfig).fetchPartitionCount(10000);
     for (int partition = 0; partition < numPartitions; partition++) {
-      final PartitionLevelConsumer consumer = streamConsumerFactory.createPartitionLevelConsumer(clientId, partition);
+      final PartitionLevelConsumer consumer = streamConsumerFactory.createPartitionLevelConsumer(clientId, String.valueOf(partition));
 
       // Test consume a large batch, only 500 records will be returned.
       final MessageBatch batch1 = consumer.fetchMessages(new LongMsgOffset(0),

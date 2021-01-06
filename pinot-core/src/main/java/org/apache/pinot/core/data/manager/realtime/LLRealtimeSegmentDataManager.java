@@ -247,7 +247,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
 
   private Thread _consumerThread;
   private final String _streamTopic;
-  private final int _streamPartitionId;
+  private final String _streamPartitionId;
   final String _clientId;
   private final LLCSegmentName _llcSegmentName;
   private final RecordTransformer _recordTransformer;
@@ -705,7 +705,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
   @Override
   public Map<String, String> getPartitionToCurrentOffset() {
     Map<String, String> partitionToCurrentOffset = new HashMap<>();
-    partitionToCurrentOffset.put(String.valueOf(_streamPartitionId), _currentOffset.toString());
+    partitionToCurrentOffset.put(_streamPartitionId, _currentOffset.toString());
     return partitionToCurrentOffset;
   }
 
@@ -1257,10 +1257,12 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
           makeStreamMetadataProvider("Timeout getting number of stream partitions");
         }
 
-        realtimeSegmentConfigBuilder.setPartitionColumn(partitionColumn);
-        realtimeSegmentConfigBuilder
-            .setPartitionFunction(PartitionFunctionFactory.getPartitionFunction(partitionFunctionName, numPartitions));
-        realtimeSegmentConfigBuilder.setPartitionId(_streamPartitionId);
+        if (_partitionLevelStreamConfig.getType().equalsIgnoreCase("kafka")) {
+          realtimeSegmentConfigBuilder.setPartitionColumn(partitionColumn);
+          realtimeSegmentConfigBuilder.setPartitionFunction(PartitionFunctionFactory.getPartitionFunction(partitionFunctionName, numPartitions));
+          // FIXME: Kafka specific assumption that partitionId is an Integer and that it equals value computed by partition function
+          realtimeSegmentConfigBuilder.setPartitionId(Integer.parseInt(_streamPartitionId));
+        }
       } else {
         segmentLogger.warn("Cannot partition on multiple columns: {}", columnPartitionMap.keySet());
       }

@@ -116,9 +116,9 @@ public class SegmentStatusCheckerTest {
     final String rawTableName = TableNameBuilder.extractRawTableName(tableName);
     List<String> allTableNames = new ArrayList<String>();
     allTableNames.add(tableName);
-    final LLCSegmentName seg1 = new LLCSegmentName(rawTableName, 1, 0, System.currentTimeMillis());
-    final LLCSegmentName seg2 = new LLCSegmentName(rawTableName, 1, 1, System.currentTimeMillis());
-    final LLCSegmentName seg3 = new LLCSegmentName(rawTableName, 2, 1, System.currentTimeMillis());
+    final LLCSegmentName seg1 = new LLCSegmentName(rawTableName, "1", 0, System.currentTimeMillis());
+    final LLCSegmentName seg2 = new LLCSegmentName(rawTableName, "1", 1, System.currentTimeMillis());
+    final LLCSegmentName seg3 = new LLCSegmentName(rawTableName, "2", 1, System.currentTimeMillis());
     IdealState idealState = new IdealState(tableName);
     idealState.setPartitionState(seg1.getSegmentName(), "pinot1", "ONLINE");
     idealState.setPartitionState(seg1.getSegmentName(), "pinot2", "ONLINE");

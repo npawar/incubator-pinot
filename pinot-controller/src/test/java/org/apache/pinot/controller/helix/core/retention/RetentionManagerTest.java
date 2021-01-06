@@ -240,14 +240,14 @@ public class RetentionManagerTest {
 
   private PinotHelixResourceManager setupSegmentMetadata(TableConfig tableConfig, final long now, final int nSegments,
       List<String> segmentsToBeDeleted) {
-    final int replicaCount = Integer.valueOf(tableConfig.getValidationConfig().getReplicasPerPartition());
+    final int replicaCount = Integer.parseInt(tableConfig.getValidationConfig().getReplicasPerPartition());
 
     List<RealtimeSegmentZKMetadata> allSegments = new ArrayList<>();
 
     IdealState idealState =
         PinotTableIdealStateBuilder.buildEmptyRealtimeIdealStateFor(REALTIME_TABLE_NAME, replicaCount, true);
 
-    final int kafkaPartition = 5;
+    final String kafkaPartition = "5";
     final long millisInDays = TimeUnit.DAYS.toMillis(1);
     final String serverName = "Server_localhost_0";
     // If we set the segment creation time to a certain value and compare it as being X ms old,

@@ -68,7 +68,7 @@ public class LLRealtimeSegmentDataManagerTest {
   private static final String _segmentDir = "/tmp/" + LLRealtimeSegmentDataManagerTest.class.getSimpleName();
   private static final File _segmentDirFile = new File(_segmentDir);
   private static final String _tableName = "Coffee";
-  private static final int _partitionId = 13;
+  private static final String _partitionId = "13";
   private static final int _sequenceId = 945;
   private static final long _segTimeMs = 98347869999L;
   private static final LLCSegmentName _segmentName =
@@ -79,7 +79,7 @@ public class LLRealtimeSegmentDataManagerTest {
   private static final String _topicName = "someTopic";
   private static final int maxRowsInSegment = 250000;
   private static final long maxTimeForSegmentCloseMs = 64368000L;
-  private final Map<Integer, Semaphore> _partitionIdToSemaphoreMap = new ConcurrentHashMap<>();
+  private final Map<String, Semaphore> _partitionIdToSemaphoreMap = new ConcurrentHashMap<>();
 
   private static long _timeNow = System.currentTimeMillis();
 
@@ -781,7 +781,7 @@ public class LLRealtimeSegmentDataManagerTest {
     private boolean _downloadAndReplaceCalled = false;
     public boolean _throwExceptionFromConsume = false;
     public boolean _postConsumeStoppedCalled = false;
-    public Map<Integer, Semaphore> _semaphoreMap;
+    public Map<String, Semaphore> _semaphoreMap;
 
     private static InstanceDataManagerConfig makeInstanceDataManagerConfig() {
       InstanceDataManagerConfig dataManagerConfig = mock(InstanceDataManagerConfig.class);
@@ -796,12 +796,12 @@ public class LLRealtimeSegmentDataManagerTest {
 
     public FakeLLRealtimeSegmentDataManager(RealtimeSegmentZKMetadata segmentZKMetadata, TableConfig tableConfig,
         RealtimeTableDataManager realtimeTableDataManager, String resourceDataDir, Schema schema,
-        LLCSegmentName llcSegmentName, Map<Integer, Semaphore> semaphoreMap, ServerMetrics serverMetrics)
+        LLCSegmentName llcSegmentName, Map<String, Semaphore> semaphoreMap, ServerMetrics serverMetrics)
         throws Exception {
       super(segmentZKMetadata, tableConfig, realtimeTableDataManager, resourceDataDir,
           new IndexLoadingConfig(makeInstanceDataManagerConfig(), tableConfig), schema, llcSegmentName,
           semaphoreMap.get(llcSegmentName.getPartitionId()), serverMetrics,
-          new PartitionUpsertMetadataManager("testTable_REALTIME", 0, serverMetrics));
+          new PartitionUpsertMetadataManager("testTable_REALTIME", "0", serverMetrics));
       _state = LLRealtimeSegmentDataManager.class.getDeclaredField("_state");
       _state.setAccessible(true);
       _shouldStop = LLRealtimeSegmentDataManager.class.getDeclaredField("_shouldStop");

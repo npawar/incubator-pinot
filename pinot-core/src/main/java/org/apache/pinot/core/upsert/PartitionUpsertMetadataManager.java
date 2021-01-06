@@ -58,10 +58,10 @@ public class PartitionUpsertMetadataManager {
   private static final Logger LOGGER = LoggerFactory.getLogger(PartitionUpsertMetadataManager.class);
 
   private final String _tableNameWithType;
-  private final int _partitionId;
+  private final String _partitionId;
   private final ServerMetrics _serverMetrics;
 
-  public PartitionUpsertMetadataManager(String tableNameWithType, int partitionId, ServerMetrics serverMetrics) {
+  public PartitionUpsertMetadataManager(String tableNameWithType, String partitionId, ServerMetrics serverMetrics) {
     _tableNameWithType = tableNameWithType;
     _partitionId = partitionId;
     _serverMetrics = serverMetrics;

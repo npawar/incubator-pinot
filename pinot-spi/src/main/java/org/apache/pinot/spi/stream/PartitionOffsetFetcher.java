@@ -33,14 +33,14 @@ public class PartitionOffsetFetcher implements Callable<Boolean> {
 
   private final String _topicName;
   private final OffsetCriteria _offsetCriteria;
-  private final int _partitionId;
+  private final String _partitionId;
 
   private Exception _exception = null;
   private StreamPartitionMsgOffset _offset;
   private StreamConsumerFactory _streamConsumerFactory;
   StreamConfig _streamConfig;
 
-  public PartitionOffsetFetcher(final OffsetCriteria offsetCriteria, int partitionId, StreamConfig streamConfig) {
+  public PartitionOffsetFetcher(final OffsetCriteria offsetCriteria, String partitionId, StreamConfig streamConfig) {
     _offsetCriteria = offsetCriteria;
     _partitionId = partitionId;
     _streamConfig = streamConfig;

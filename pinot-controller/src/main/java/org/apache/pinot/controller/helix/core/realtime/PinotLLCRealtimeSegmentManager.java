@@ -24,6 +24,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -224,7 +225,7 @@ public class PinotLLCRealtimeSegmentManager {
     Map<String, Map<String, String>> instanceStatesMap = idealState.getRecord().getMapFields();
     for (int partitionId = 0; partitionId < numPartitions; partitionId++) {
       String segmentName =
-          setupNewPartition(tableConfig, streamConfig, partitionId, currentTimeMs, instancePartitions, numPartitions,
+          setupNewPartition(tableConfig, streamConfig, String.valueOf(partitionId), currentTimeMs, instancePartitions, numPartitions,
               numReplicas);
       updateInstanceStatesForNewConsumingSegment(instanceStatesMap, null, segmentName, segmentAssignment,
           instancePartitionsMap);
@@ -555,10 +556,19 @@ public class PinotLLCRealtimeSegmentManager {
     newSegmentZKMetadata.setStatus(Status.IN_PROGRESS);
 
     // Add the partition metadata if available
-    SegmentPartitionMetadata partitionMetadata =
-        getPartitionMetadataFromTableConfig(tableConfig, newLLCSegmentName.getPartitionId());
-    if (partitionMetadata != null) {
-      newSegmentZKMetadata.setPartitionMetadata(partitionMetadata);
+    // FIXME: Here a assumption is being made that, partitionId == the value computed by the partitioning function
+    //  This is a Kafka specific assumption
+    //  In Kinesis, the shardIds are alphanumeric. Kinesis computes MD5 hash of partition key, and every shard gets a hash range.
+    //  The [shard -> hash range] mapping is available as part of stream metadata
+
+    //  TODO: get the partition hash range for this segment from the stream impl
+    //   Undeprecate the partitionRange construct
+    if (streamConfig.getType().equalsIgnoreCase("kafka")) {
+      SegmentPartitionMetadata partitionMetadata =
+          getPartitionMetadataFromTableConfig(tableConfig, Integer.parseInt(newLLCSegmentName.getPartitionId()));
+      if (partitionMetadata != null) {
+        newSegmentZKMetadata.setPartitionMetadata(partitionMetadata);
+      }
     }
 
     // Update the flush threshold
@@ -632,7 +642,7 @@ public class PinotLLCRealtimeSegmentManager {
 
   @VisibleForTesting
   StreamPartitionMsgOffset getPartitionOffset(StreamConfig streamConfig, OffsetCriteria offsetCriteria,
-      int partitionId) {
+      String partitionId) {
     PartitionOffsetFetcher partitionOffsetFetcher =
         new PartitionOffsetFetcher(offsetCriteria, partitionId, streamConfig);
     try {
@@ -683,10 +693,10 @@ public class PinotLLCRealtimeSegmentManager {
    * @param realtimeTableName Realtime table name
    * @return Map from partition id to the latest LLC realtime segment ZK metadata
    */
-  private Map<Integer, LLCRealtimeSegmentZKMetadata> getLatestSegmentZKMetadataMap(String realtimeTableName) {
+  private Map<String, LLCRealtimeSegmentZKMetadata> getLatestSegmentZKMetadataMap(String realtimeTableName) {
     List<String> segments = getLLCSegments(realtimeTableName);
 
-    Map<Integer, LLCSegmentName> latestLLCSegmentNameMap = new HashMap<>();
+    Map<String, LLCSegmentName> latestLLCSegmentNameMap = new HashMap<>();
     for (String segmentName : segments) {
       LLCSegmentName llcSegmentName = new LLCSegmentName(segmentName);
       latestLLCSegmentNameMap.compute(llcSegmentName.getPartitionId(), (partitionId, latestLLCSegmentName) -> {
@@ -702,8 +712,8 @@ public class PinotLLCRealtimeSegmentManager {
       });
     }
 
-    Map<Integer, LLCRealtimeSegmentZKMetadata> latestSegmentZKMetadataMap = new HashMap<>();
-    for (Map.Entry<Integer, LLCSegmentName> entry : latestLLCSegmentNameMap.entrySet()) {
+    Map<String, LLCRealtimeSegmentZKMetadata> latestSegmentZKMetadataMap = new HashMap<>();
+    for (Map.Entry<String, LLCSegmentName> entry : latestLLCSegmentNameMap.entrySet()) {
       LLCRealtimeSegmentZKMetadata latestSegmentZKMetadata =
           getSegmentZKMetadata(realtimeTableName, entry.getValue().getSegmentName());
       latestSegmentZKMetadataMap.put(entry.getKey(), latestSegmentZKMetadata);
@@ -886,7 +896,7 @@ public class PinotLLCRealtimeSegmentManager {
         StreamConsumerFactoryProvider.create(streamConfig).createStreamMsgOffsetFactory();
 
     // Get the latest segment ZK metadata for each partition
-    Map<Integer, LLCRealtimeSegmentZKMetadata> latestSegmentZKMetadataMap =
+    Map<String, LLCRealtimeSegmentZKMetadata> latestSegmentZKMetadataMap =
         getLatestSegmentZKMetadataMap(realtimeTableName);
 
     // Walk over all partitions that we have metadata for, and repair any partitions necessary.
@@ -902,8 +912,8 @@ public class PinotLLCRealtimeSegmentManager {
     //    a. Create a new segment (with the next seq number)
     //       and restart consumption from the same offset (if possible) or a newer offset (if realtime stream does not have the same offset).
     //       In latter case, report data loss.
-    for (Map.Entry<Integer, LLCRealtimeSegmentZKMetadata> entry : latestSegmentZKMetadataMap.entrySet()) {
-      int partitionId = entry.getKey();
+    for (Map.Entry<String, LLCRealtimeSegmentZKMetadata> entry : latestSegmentZKMetadataMap.entrySet()) {
+      String partitionId = entry.getKey();
       LLCRealtimeSegmentZKMetadata latestSegmentZKMetadata = entry.getValue();
       String latestSegmentName = latestSegmentZKMetadata.getSegmentName();
       LLCSegmentName latestLLCSegmentName = new LLCSegmentName(latestSegmentName);
@@ -987,7 +997,7 @@ public class PinotLLCRealtimeSegmentManager {
           String previousConsumingSegment = null;
           for (Map.Entry<String, Map<String, String>> segmentEntry : instanceStatesMap.entrySet()) {
             LLCSegmentName llcSegmentName = new LLCSegmentName(segmentEntry.getKey());
-            if (llcSegmentName.getPartitionId() == partitionId && segmentEntry.getValue()
+            if (llcSegmentName.getPartitionId().equals(partitionId) && segmentEntry.getValue()
                 .containsValue(SegmentStateModel.CONSUMING)) {
               previousConsumingSegment = llcSegmentName.getSegmentName();
               break;
@@ -1010,9 +1020,9 @@ public class PinotLLCRealtimeSegmentManager {
 
     // Set up new partitions if not exist
     for (int partitionId = 0; partitionId < numPartitions; partitionId++) {
-      if (!latestSegmentZKMetadataMap.containsKey(partitionId)) {
+      if (!latestSegmentZKMetadataMap.containsKey(String.valueOf(partitionId))) {
         String newSegmentName =
-            setupNewPartition(tableConfig, streamConfig, partitionId, currentTimeMs, instancePartitions, numPartitions,
+            setupNewPartition(tableConfig, streamConfig, String.valueOf(partitionId), currentTimeMs, instancePartitions, numPartitions,
                 numReplicas);
         updateInstanceStatesForNewConsumingSegment(instanceStatesMap, null, newSegmentName, segmentAssignment,
             instancePartitionsMap);
@@ -1031,7 +1041,7 @@ public class PinotLLCRealtimeSegmentManager {
    * Sets up a new partition.
    * <p>Persists the ZK metadata for the first CONSUMING segment, and returns the segment name.
    */
-  private String setupNewPartition(TableConfig tableConfig, PartitionLevelStreamConfig streamConfig, int partitionId,
+  private String setupNewPartition(TableConfig tableConfig, PartitionLevelStreamConfig streamConfig, String partitionId,
       long creationTimeMs, InstancePartitions instancePartitions, int numPartitions, int numReplicas) {
     String realtimeTableName = tableConfig.getTableName();
     LOGGER.info("Setting up new partition: {} for table: {}", partitionId, realtimeTableName);
@@ -1056,13 +1066,13 @@ public class PinotLLCRealtimeSegmentManager {
   }
 
   private int getNumPartitionsFromIdealState(IdealState idealState) {
-    int numPartitions = 0;
+    Set<String> uniquePartitions = new HashSet<>();
     for (String segmentName : idealState.getRecord().getMapFields().keySet()) {
       if (LLCSegmentName.isLowLevelConsumerSegmentName(segmentName)) {
-        numPartitions = Math.max(numPartitions, new LLCSegmentName(segmentName).getPartitionId() + 1);
+        uniquePartitions.add(new LLCSegmentName(segmentName).getPartitionId());
       }
     }
-    return numPartitions;
+    return uniquePartitions.size();
   }
 
   private int getNumReplicas(TableConfig tableConfig, InstancePartitions instancePartitions) {

@@ -120,8 +120,8 @@ public class RealtimeToOfflineSegmentsTaskGenerator implements PinotTaskGenerato
 
       // Get all segment metadata for completed segments (DONE status).
       List<LLCRealtimeSegmentZKMetadata> completedSegmentsMetadata = new ArrayList<>();
-      Map<Integer, String> partitionToLatestCompletedSegmentName = new HashMap<>();
-      Set<Integer> allPartitions = new HashSet<>();
+      Map<String, String> partitionToLatestCompletedSegmentName = new HashMap<>();
+      Set<String> allPartitions = new HashSet<>();
       getCompletedSegmentsInfo(realtimeTableName, completedSegmentsMetadata, partitionToLatestCompletedSegmentName,
           allPartitions);
       if (completedSegmentsMetadata.isEmpty()) {
@@ -241,11 +241,11 @@ public class RealtimeToOfflineSegmentsTaskGenerator implements PinotTaskGenerato
    */
   private void getCompletedSegmentsInfo(String realtimeTableName,
       List<LLCRealtimeSegmentZKMetadata> completedSegmentsMetadataList,
-      Map<Integer, String> partitionToLatestCompletedSegmentName, Set<Integer> allPartitions) {
+      Map<String, String> partitionToLatestCompletedSegmentName, Set<String> allPartitions) {
     List<LLCRealtimeSegmentZKMetadata> realtimeSegmentsMetadataList =
         _clusterInfoAccessor.getLLCRealtimeSegmentsMetadata(realtimeTableName);
 
-    Map<Integer, LLCSegmentName> latestLLCSegmentNameMap = new HashMap<>();
+    Map<String, LLCSegmentName> latestLLCSegmentNameMap = new HashMap<>();
     for (LLCRealtimeSegmentZKMetadata metadata : realtimeSegmentsMetadataList) {
       LLCSegmentName llcSegmentName = new LLCSegmentName(metadata.getSegmentName());
       allPartitions.add(llcSegmentName.getPartitionId());
@@ -266,7 +266,7 @@ public class RealtimeToOfflineSegmentsTaskGenerator implements PinotTaskGenerato
       }
     }
 
-    for (Map.Entry<Integer, LLCSegmentName> entry : latestLLCSegmentNameMap.entrySet()) {
+    for (Map.Entry<String, LLCSegmentName> entry : latestLLCSegmentNameMap.entrySet()) {
       partitionToLatestCompletedSegmentName.put(entry.getKey(), entry.getValue().getSegmentName());
     }
   }

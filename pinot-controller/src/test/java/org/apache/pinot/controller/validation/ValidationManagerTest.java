@@ -123,8 +123,8 @@ public class ValidationManagerTest {
         60);
 
     // Now add some low level segment names
-    String segmentName5 = new LLCSegmentName(TEST_TABLE_NAME, 1, 0, 1000).getSegmentName();
-    String segmentName6 = new LLCSegmentName(TEST_TABLE_NAME, 2, 27, 10000).getSegmentName();
+    String segmentName5 = new LLCSegmentName(TEST_TABLE_NAME, "1", 0, 1000).getSegmentName();
+    String segmentName6 = new LLCSegmentName(TEST_TABLE_NAME, "2", 27, 10000).getSegmentName();
     segmentZKMetadataList.add(
         SegmentMetadataMockUtils.mockRealtimeSegmentZKMetadata(TEST_TABLE_NAME, segmentName5, 10));
     segmentZKMetadataList.add(SegmentMetadataMockUtils.mockRealtimeSegmentZKMetadata(TEST_TABLE_NAME, segmentName6, 5));

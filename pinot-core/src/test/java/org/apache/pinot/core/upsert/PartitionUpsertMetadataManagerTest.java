@@ -43,7 +43,7 @@ public class PartitionUpsertMetadataManagerTest {
   @Test
   public void testAddSegment() {
     PartitionUpsertMetadataManager upsertMetadataManager =
-        new PartitionUpsertMetadataManager(REALTIME_TABLE_NAME, 0, Mockito.mock(ServerMetrics.class));
+        new PartitionUpsertMetadataManager(REALTIME_TABLE_NAME, "0", Mockito.mock(ServerMetrics.class));
     Map<PrimaryKey, RecordLocation> recordLocationMap = upsertMetadataManager._primaryKeyToRecordLocationMap;
 
     // Add the first segment
@@ -111,7 +111,7 @@ public class PartitionUpsertMetadataManagerTest {
   }
 
   private static String getSegmentName(int sequenceNumber) {
-    return new LLCSegmentName(RAW_TABLE_NAME, 0, sequenceNumber, System.currentTimeMillis()).toString();
+    return new LLCSegmentName(RAW_TABLE_NAME, "0", sequenceNumber, System.currentTimeMillis()).toString();
   }
 
   private static PrimaryKey getPrimaryKey(int value) {
@@ -130,7 +130,7 @@ public class PartitionUpsertMetadataManagerTest {
   @Test
   public void testUpdateRecord() {
     PartitionUpsertMetadataManager upsertMetadataManager =
-        new PartitionUpsertMetadataManager(REALTIME_TABLE_NAME, 0, Mockito.mock(ServerMetrics.class));
+        new PartitionUpsertMetadataManager(REALTIME_TABLE_NAME, "0", Mockito.mock(ServerMetrics.class));
     Map<PrimaryKey, RecordLocation> recordLocationMap = upsertMetadataManager._primaryKeyToRecordLocationMap;
 
     // Add the first segment
@@ -191,7 +191,7 @@ public class PartitionUpsertMetadataManagerTest {
   @Test
   public void testRemoveSegment() {
     PartitionUpsertMetadataManager upsertMetadataManager =
-        new PartitionUpsertMetadataManager(REALTIME_TABLE_NAME, 0, Mockito.mock(ServerMetrics.class));
+        new PartitionUpsertMetadataManager(REALTIME_TABLE_NAME, "0", Mockito.mock(ServerMetrics.class));
     Map<PrimaryKey, RecordLocation> recordLocationMap = upsertMetadataManager._primaryKeyToRecordLocationMap;
 
     // Add 2 segments

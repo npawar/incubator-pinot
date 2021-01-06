@@ -98,7 +98,7 @@ public class SegmentSelectorTest {
     String[] expectedSelectedLLCSegments = new String[numLLCPartitions * (numLLCSegmentsPerPartition - 1)];
     for (int i = 0; i < numLLCPartitions; i++) {
       for (int j = 0; j < numLLCSegmentsPerPartition; j++) {
-        String llcSegment = new LLCSegmentName(realtimeTableName, i, j, 0).getSegmentName();
+        String llcSegment = new LLCSegmentName(realtimeTableName, String.valueOf(i), j, 0).getSegmentName();
         if (j < numOnlineLLCSegmentsPerPartition) {
           externalView.setStateMap(llcSegment, onlineInstanceStateMap);
         } else {

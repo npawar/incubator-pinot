@@ -39,7 +39,7 @@ public class SegmentNameBuilderTest {
     HLCSegmentName shortNameSegment = new HLCSegmentName(groupId, partitionRange, sequenceNumber);
     HLCSegmentName longNameSegment = new HLCSegmentName(oldV1Name);
     final String shortV1Name = shortNameSegment.getSegmentName();
-    LLCSegmentName llcSegment = new LLCSegmentName("myTable", 0, 1, 1465508537069L);
+    LLCSegmentName llcSegment = new LLCSegmentName("myTable", "0", 1, 1465508537069L);
     final String v2Name = llcSegment.getSegmentName();
 
     assertEquals(shortV1Name, "myTable_REALTIME_1234567_0__ALL__1234567");
@@ -58,7 +58,7 @@ public class SegmentNameBuilderTest {
     // Check partition range
     assertEquals(longNameSegment.getPartitionRange(), "0");
     assertEquals(shortNameSegment.getPartitionRange(), "ALL");
-    assertEquals(llcSegment.getPartitionId(), 0);
+    assertEquals(llcSegment.getPartitionId(), "0");
 
     // Check groupId
     assertEquals(longNameSegment.getGroupId(), "myTable_REALTIME_1234567_0");
@@ -119,38 +119,40 @@ public class SegmentNameBuilderTest {
   @Test
   public void LLCSegNameTest() {
     final String tableName = "myTable";
-    final int partitionId = 4;
+    final String partitionId4 = "4";
+    final String partitionId3 = "3";
+    final String partitionId5 = "5";
     final int sequenceNumber = 27;
     final long msSinceEpoch = 1466200248000L;
     final String creationTime = "20160617T2150Z";
     final String segmentName = "myTable__4__27__" + creationTime;
 
-    LLCSegmentName segName1 = new LLCSegmentName(tableName, partitionId, sequenceNumber, msSinceEpoch);
+    LLCSegmentName segName1 = new LLCSegmentName(tableName, partitionId4, sequenceNumber, msSinceEpoch);
     Assert.assertEquals(segName1.getSegmentName(), segmentName);
-    Assert.assertEquals(segName1.getPartitionId(), partitionId);
+    Assert.assertEquals(segName1.getPartitionId(), partitionId4);
     Assert.assertEquals(segName1.getCreationTime(), creationTime);
     Assert.assertEquals(segName1.getSequenceNumber(), sequenceNumber);
     Assert.assertEquals(segName1.getTableName(), tableName);
 
     LLCSegmentName segName2 = new LLCSegmentName(segmentName);
     Assert.assertEquals(segName2.getSegmentName(), segmentName);
-    Assert.assertEquals(segName2.getPartitionId(), partitionId);
+    Assert.assertEquals(segName2.getPartitionId(), partitionId4);
     Assert.assertEquals(segName2.getCreationTime(), creationTime);
     Assert.assertEquals(segName2.getSequenceNumber(), sequenceNumber);
     Assert.assertEquals(segName2.getTableName(), tableName);
 
     Assert.assertEquals(segName1, segName2);
 
-    LLCSegmentName segName3 = new LLCSegmentName(tableName, partitionId + 1, sequenceNumber - 1, msSinceEpoch);
+    LLCSegmentName segName3 = new LLCSegmentName(tableName, partitionId5, sequenceNumber - 1, msSinceEpoch);
     Assert.assertTrue(segName1.compareTo(segName3) < 0);
-    LLCSegmentName segName4 = new LLCSegmentName(tableName, partitionId + 1, sequenceNumber + 1, msSinceEpoch);
+    LLCSegmentName segName4 = new LLCSegmentName(tableName, partitionId5, sequenceNumber + 1, msSinceEpoch);
     Assert.assertTrue(segName1.compareTo(segName4) < 0);
-    LLCSegmentName segName5 = new LLCSegmentName(tableName, partitionId - 1, sequenceNumber + 1, msSinceEpoch);
+    LLCSegmentName segName5 = new LLCSegmentName(tableName, partitionId3, sequenceNumber + 1, msSinceEpoch);
     Assert.assertTrue(segName1.compareTo(segName5) > 0);
-    LLCSegmentName segName6 = new LLCSegmentName(tableName, partitionId, sequenceNumber + 1, msSinceEpoch);
+    LLCSegmentName segName6 = new LLCSegmentName(tableName, partitionId4, sequenceNumber + 1, msSinceEpoch);
     Assert.assertTrue(segName1.compareTo(segName6) < 0);
 
-    LLCSegmentName segName7 = new LLCSegmentName(tableName + "NotGood", partitionId, sequenceNumber + 1, msSinceEpoch);
+    LLCSegmentName segName7 = new LLCSegmentName(tableName + "NotGood", partitionId4, sequenceNumber + 1, msSinceEpoch);
     try {
       segName1.compareTo(segName7);
       Assert.fail("Not failing when comparing " + segName1.getSegmentName() + " and " + segName7.getSegmentName());
@@ -159,10 +161,10 @@ public class SegmentNameBuilderTest {
     }
     LLCSegmentName[] testSorted = new LLCSegmentName[]{segName3, segName1, segName4, segName5, segName6};
     Arrays.sort(testSorted);
-    Assert.assertTrue(testSorted[0] == segName5);
-    Assert.assertTrue(testSorted[1] == segName1);
-    Assert.assertTrue(testSorted[2] == segName6);
-    Assert.assertTrue(testSorted[3] == segName3);
-    Assert.assertTrue(testSorted[4] == segName4);
+    Assert.assertSame(testSorted[0], segName5);
+    Assert.assertSame(testSorted[1], segName1);
+    Assert.assertSame(testSorted[2], segName6);
+    Assert.assertSame(testSorted[3], segName3);
+    Assert.assertSame(testSorted[4], segName4);
   }
 }

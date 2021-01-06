@@ -98,7 +98,7 @@ public class FlakyConsumerRealtimeClusterIntegrationTest extends RealtimeCluster
   public static class FlakyStreamFactory extends StreamConsumerFactory {
 
     @Override
-    public PartitionLevelConsumer createPartitionLevelConsumer(String clientId, int partition) {
+    public PartitionLevelConsumer createPartitionLevelConsumer(String clientId, String partition) {
       throw new UnsupportedOperationException();
     }
 
@@ -109,7 +109,7 @@ public class FlakyConsumerRealtimeClusterIntegrationTest extends RealtimeCluster
     }
 
     @Override
-    public StreamMetadataProvider createPartitionMetadataProvider(String clientId, int partition) {
+    public StreamMetadataProvider createPartitionMetadataProvider(String clientId, String partition) {
       throw new UnsupportedOperationException();
     }
 

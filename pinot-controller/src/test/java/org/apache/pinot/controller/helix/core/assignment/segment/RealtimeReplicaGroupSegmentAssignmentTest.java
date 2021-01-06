@@ -66,7 +66,7 @@ public class RealtimeReplicaGroupSegmentAssignmentTest {
   public void setUp() {
     _segments = new ArrayList<>(NUM_SEGMENTS);
     for (int segmentId = 0; segmentId < NUM_SEGMENTS; segmentId++) {
-      _segments.add(new LLCSegmentName(RAW_TABLE_NAME, segmentId % NUM_PARTITIONS, segmentId / NUM_PARTITIONS,
+      _segments.add(new LLCSegmentName(RAW_TABLE_NAME, String.valueOf(segmentId % NUM_PARTITIONS), segmentId / NUM_PARTITIONS,
           System.currentTimeMillis()).getSegmentName());
     }
 

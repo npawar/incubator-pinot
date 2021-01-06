@@ -31,8 +31,8 @@ import org.apache.pinot.spi.stream.StreamMetadataProvider;
 public class KafkaConsumerFactory extends StreamConsumerFactory {
 
   @Override
-  public PartitionLevelConsumer createPartitionLevelConsumer(String clientId, int partition) {
-    return new KafkaPartitionLevelConsumer(clientId, _streamConfig, partition);
+  public PartitionLevelConsumer createPartitionLevelConsumer(String clientId, String partition) {
+    return new KafkaPartitionLevelConsumer(clientId, _streamConfig, Integer.parseInt(partition));
   }
 
   @Override
@@ -42,8 +42,8 @@ public class KafkaConsumerFactory extends StreamConsumerFactory {
   }
 
   @Override
-  public StreamMetadataProvider createPartitionMetadataProvider(String clientId, int partition) {
-    return new KafkaStreamMetadataProvider(clientId, _streamConfig, partition);
+  public StreamMetadataProvider createPartitionMetadataProvider(String clientId, String partition) {
+    return new KafkaStreamMetadataProvider(clientId, _streamConfig, Integer.parseInt(partition));
   }
 
   @Override

@@ -69,7 +69,7 @@ public class RealtimeSegmentSelector implements SegmentSelector {
 
     List<String> completedLLCSegments = new ArrayList<>();
     // Store the first CONSUMING segment for each partition
-    Map<Integer, LLCSegmentName> partitionIdToFirstConsumingLLCSegmentMap = new HashMap<>();
+    Map<String, LLCSegmentName> partitionIdToFirstConsumingLLCSegmentMap = new HashMap<>();
 
     // Iterate over the external view instead of the online segments so that the map lookups are performed on the
     // HashSet instead of the TreeSet for performance. For LLC segments, we need the external view to figure out whether

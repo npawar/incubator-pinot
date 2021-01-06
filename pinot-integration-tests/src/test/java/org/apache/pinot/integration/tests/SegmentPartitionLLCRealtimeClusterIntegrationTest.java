@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -152,7 +153,7 @@ public class SegmentPartitionLLCRealtimeClusterIntegrationTest extends BaseClust
 
   @Test
   public void testPartitionMetadata() {
-    int[] numSegmentsForPartition = new int[2];
+    Map<String, Integer> numSegmentsForPartition = new HashMap<>();
     List<RealtimeSegmentZKMetadata> segmentZKMetadataList =
         _helixResourceManager.getRealtimeSegmentMetadata(getTableName());
     for (RealtimeSegmentZKMetadata segmentZKMetadata : segmentZKMetadataList) {
@@ -165,14 +166,15 @@ public class SegmentPartitionLLCRealtimeClusterIntegrationTest extends BaseClust
       assertNotNull(columnPartitionMetadata);
       assertTrue(columnPartitionMetadata.getFunctionName().equalsIgnoreCase("murmur"));
       assertEquals(columnPartitionMetadata.getNumPartitions(), 2);
-      int streamPartitionId = new LLCSegmentName(segmentZKMetadata.getSegmentName()).getPartitionId();
+      String streamPartitionId = new LLCSegmentName(segmentZKMetadata.getSegmentName()).getPartitionId();
       assertEquals(columnPartitionMetadata.getPartitions(), Collections.singleton(streamPartitionId));
-      numSegmentsForPartition[streamPartitionId]++;
+      int currentNumSegments = numSegmentsForPartition.getOrDefault(streamPartitionId, 0);
+      numSegmentsForPartition.put(streamPartitionId, currentNumSegments + 1);
     }
 
     // There should be 2 segments for partition 0, 2 segments for partition 1
-    assertEquals(numSegmentsForPartition[0], 2);
-    assertEquals(numSegmentsForPartition[1], 2);
+    assertEquals(numSegmentsForPartition.get("0"), 2d);
+    assertEquals(numSegmentsForPartition.get("1"), 2d);
   }
 
   @Test(dependsOnMethods = "testPartitionMetadata")
@@ -223,7 +225,7 @@ public class SegmentPartitionLLCRealtimeClusterIntegrationTest extends BaseClust
     waitForAllDocsLoaded(600_000L);
 
     // Check partition metadata
-    int[] numSegmentsForPartition = new int[2];
+    Map<String, Integer> numSegmentsForPartition = new HashMap<>();
     List<RealtimeSegmentZKMetadata> segmentZKMetadataList =
         _helixResourceManager.getRealtimeSegmentMetadata(getTableName());
     for (RealtimeSegmentZKMetadata segmentZKMetadata : segmentZKMetadataList) {
@@ -236,8 +238,9 @@ public class SegmentPartitionLLCRealtimeClusterIntegrationTest extends BaseClust
       assertNotNull(columnPartitionMetadata);
       assertTrue(columnPartitionMetadata.getFunctionName().equalsIgnoreCase("murmur"));
       assertEquals(columnPartitionMetadata.getNumPartitions(), 2);
-      int streamPartitionId = new LLCSegmentName(segmentZKMetadata.getSegmentName()).getPartitionId();
-      numSegmentsForPartition[streamPartitionId]++;
+      String streamPartitionId = new LLCSegmentName(segmentZKMetadata.getSegmentName()).getPartitionId();
+      int currentNumSegments = numSegmentsForPartition.getOrDefault(streamPartitionId, 0);
+      numSegmentsForPartition.put(streamPartitionId, currentNumSegments + 1);
 
       if (segmentZKMetadata.getStatus() == Status.IN_PROGRESS) {
         // For consuming segment, the partition metadata should only contain the stream partition
@@ -256,8 +259,8 @@ public class SegmentPartitionLLCRealtimeClusterIntegrationTest extends BaseClust
     }
 
     // There should be 4 segments for partition 0, 4 segments for partition 1
-    assertEquals(numSegmentsForPartition[0], 4);
-    assertEquals(numSegmentsForPartition[1], 4);
+    assertEquals(numSegmentsForPartition.get("0"), 4d);
+    assertEquals(numSegmentsForPartition.get("1"), 4d);
 
     // Check partition routing
     int numSegments = segmentZKMetadataList.size();
@@ -301,7 +304,7 @@ public class SegmentPartitionLLCRealtimeClusterIntegrationTest extends BaseClust
     waitForAllDocsLoaded(600_000L);
 
     // Check partition metadata
-    numSegmentsForPartition = new int[2];
+    numSegmentsForPartition = new HashMap<>();
     segmentZKMetadataList = _helixResourceManager.getRealtimeSegmentMetadata(getTableName());
     for (RealtimeSegmentZKMetadata segmentZKMetadata : segmentZKMetadataList) {
       SegmentPartitionMetadata segmentPartitionMetadata = segmentZKMetadata.getPartitionMetadata();
@@ -313,8 +316,9 @@ public class SegmentPartitionLLCRealtimeClusterIntegrationTest extends BaseClust
       assertNotNull(columnPartitionMetadata);
       assertTrue(columnPartitionMetadata.getFunctionName().equalsIgnoreCase("murmur"));
       assertEquals(columnPartitionMetadata.getNumPartitions(), 2);
-      int streamPartitionId = new LLCSegmentName(segmentZKMetadata.getSegmentName()).getPartitionId();
-      numSegmentsForPartition[streamPartitionId]++;
+      String streamPartitionId = new LLCSegmentName(segmentZKMetadata.getSegmentName()).getPartitionId();
+      int currentNumSegments = numSegmentsForPartition.getOrDefault(streamPartitionId, 0);
+      numSegmentsForPartition.put(streamPartitionId, currentNumSegments + 1);
 
       if (segmentZKMetadata.getStatus() == Status.IN_PROGRESS) {
         // For consuming segment, the partition metadata should only contain the stream partition
@@ -335,8 +339,8 @@ public class SegmentPartitionLLCRealtimeClusterIntegrationTest extends BaseClust
     }
 
     // There should be 6 segments for partition 0, 6 segments for partition 1
-    assertEquals(numSegmentsForPartition[0], 6);
-    assertEquals(numSegmentsForPartition[1], 6);
+    assertEquals(numSegmentsForPartition.get("0"), 6d);
+    assertEquals(numSegmentsForPartition.get("1"), 6d);
 
     // Check partition routing
     numSegments = segmentZKMetadataList.size();

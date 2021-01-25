@@ -233,7 +233,7 @@ public class RealtimeTableDataManager extends BaseTableDataManager {
     if (indexDir.exists() && (realtimeSegmentZKMetadata.getStatus() == Status.DONE)) {
       // Segment already exists on disk, and metadata has been committed. Treat it like an offline segment
 
-      addSegment(ImmutableSegmentLoader.load(indexDir, indexLoadingConfig, schema));
+      addSegment(ImmutableSegmentLoader.load(indexDir, indexLoadingConfig, schema, tableConfig));
     } else {
       // Either we don't have the segment on disk or we have not committed in ZK. We should be starting the consumer
       // for realtime segment here. If we wrote it on disk but could not get to commit to zk yet, we should replace the
@@ -368,7 +368,8 @@ public class RealtimeTableDataManager extends BaseTableDataManager {
     ZKMetadataProvider.setRealtimeSegmentZKMetadata(_propertyStore, _tableNameWithType, segmentZKMetadata);
     File indexDir = new File(_indexDir, segmentZKMetadata.getSegmentName());
     Schema schema = ZKMetadataProvider.getTableSchema(_propertyStore, _tableNameWithType);
-    addSegment(ImmutableSegmentLoader.load(indexDir, indexLoadingConfig, schema));
+    TableConfig tableConfig = ZKMetadataProvider.getTableConfig(_propertyStore, _tableNameWithType);
+    addSegment(ImmutableSegmentLoader.load(indexDir, indexLoadingConfig, schema, tableConfig));
   }
 
   /**
@@ -378,7 +379,8 @@ public class RealtimeTableDataManager extends BaseTableDataManager {
     try {
       File indexDir = new File(_indexDir, segmentName);
       Schema schema = ZKMetadataProvider.getTableSchema(_propertyStore, _tableNameWithType);
-      addSegment(ImmutableSegmentLoader.load(indexDir, indexLoadingConfig, schema));
+      TableConfig tableConfig = ZKMetadataProvider.getTableConfig(_propertyStore, _tableNameWithType);
+      addSegment(ImmutableSegmentLoader.load(indexDir, indexLoadingConfig, schema, tableConfig));
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

@@ -39,6 +39,7 @@ import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnContext;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProvider;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProviderFactory;
 import org.apache.pinot.core.startree.v2.store.StarTreeIndexContainer;
+import org.apache.pinot.spi.config.table.TableConfig;
 import org.apache.pinot.spi.data.FieldSpec;
 import org.apache.pinot.spi.data.Schema;
 import org.slf4j.Logger;
@@ -58,7 +59,7 @@ public class ImmutableSegmentLoader {
       throws Exception {
     IndexLoadingConfig defaultIndexLoadingConfig = new IndexLoadingConfig();
     defaultIndexLoadingConfig.setReadMode(readMode);
-    return load(indexDir, defaultIndexLoadingConfig, null);
+    return load(indexDir, defaultIndexLoadingConfig, null, null);
   }
 
   /**
@@ -66,10 +67,11 @@ public class ImmutableSegmentLoader {
    */
   public static ImmutableSegment load(File indexDir, IndexLoadingConfig indexLoadingConfig)
       throws Exception {
-    return load(indexDir, indexLoadingConfig, null);
+    return load(indexDir, indexLoadingConfig, null, null);
   }
 
-  public static ImmutableSegment load(File indexDir, IndexLoadingConfig indexLoadingConfig, @Nullable Schema schema)
+  public static ImmutableSegment load(File indexDir, IndexLoadingConfig indexLoadingConfig, @Nullable Schema schema,
+      TableConfig tableConfig)
       throws Exception {
     Preconditions
         .checkArgument(indexDir.isDirectory(), "Index directory: %s does not exist or is not a directory", indexDir);
@@ -95,7 +97,7 @@ public class ImmutableSegmentLoader {
 
     // Pre-process the segment
     // NOTE: this step may modify the segment metadata
-    try (SegmentPreProcessor preProcessor = new SegmentPreProcessor(indexDir, indexLoadingConfig, schema)) {
+    try (SegmentPreProcessor preProcessor = new SegmentPreProcessor(indexDir, indexLoadingConfig, schema, tableConfig)) {
       preProcessor.process();
     }
 

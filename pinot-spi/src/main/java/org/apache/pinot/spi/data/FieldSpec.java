@@ -73,6 +73,7 @@ public abstract class FieldSpec implements Comparable<FieldSpec> {
   protected String _transformFunction;
 
   protected String _virtualColumnProvider;
+  protected boolean _derived = false;
 
   // Default constructor required by JSON de-serializer. DO NOT REMOVE.
   public FieldSpec() {
@@ -158,6 +159,15 @@ public abstract class FieldSpec implements Comparable<FieldSpec> {
 
   public String getDefaultNullValueString() {
     return getStringValue(_defaultNullValue);
+  }
+
+  public boolean isDerived() {
+    return _derived;
+  }
+
+  // Required by JSON de-serializer. DO NOT REMOVE.
+  public void setDerived(boolean derived) {
+    _derived = derived;
   }
 
   /**

@@ -248,7 +248,7 @@ public class HelixInstanceDataManager implements InstanceDataManager {
 
       // Load from index directory
       ImmutableSegment immutableSegment = ImmutableSegmentLoader
-          .load(indexDir, new IndexLoadingConfig(_instanceDataManagerConfig, tableConfig), schema);
+          .load(indexDir, new IndexLoadingConfig(_instanceDataManagerConfig, tableConfig), schema, tableConfig);
 
       // Replace the old segment in memory
       tableDataManager.addSegment(immutableSegment);

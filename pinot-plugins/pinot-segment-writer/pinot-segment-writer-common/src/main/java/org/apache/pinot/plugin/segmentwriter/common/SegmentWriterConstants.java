@@ -16,8 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.spi.data.readers;
+package org.apache.pinot.plugin.segmentwriter.common;
 
-public enum FileFormat {
-  AVRO, GZIPPED_AVRO, CSV, JSON, PINOT, THRIFT, PARQUET, ORC, PROTO, OTHER, GENERIC_ROW
+public class SegmentWriterConstants {
+
+  public static String CONTROLLER_URI_PROP = "controllerUri";
+  public static String TABLE_NAME_WITH_TYPE_PROP = "tableNameWithType";
 }

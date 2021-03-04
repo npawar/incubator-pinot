@@ -21,14 +21,23 @@ package org.apache.pinot.controller.util;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.pinot.common.utils.TarGzCompressionUtils;
 import org.apache.pinot.controller.api.resources.SuccessResponse;
 import org.apache.pinot.core.indexsegment.generator.SegmentGeneratorConfig;
+import org.apache.pinot.core.util.FileIngestionUtils;
 import org.apache.pinot.spi.config.table.TableConfig;
 import org.apache.pinot.spi.data.Schema;
+import org.apache.pinot.spi.filesystem.PinotFSFactory;
 import org.apache.pinot.spi.ingestion.batch.BatchConfig;
+import org.apache.pinot.spi.utils.IngestionConfigUtils;
+import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataMultiPart;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,10 +97,10 @@ public class FileIngestionHelper {
       File inputFile = new File(inputDir,
           String.format("%s.%s", DATA_FILE_PREFIX, _batchConfig.getInputFormat().toString().toLowerCase()));
       if (payload._payloadType == PayloadType.URI) {
-        FileIngestionUtils.copyURIToLocal(_batchConfig, payload._uri, inputFile);
+        copyURIToLocal(_batchConfig, payload._uri, inputFile);
         LOGGER.info("Copied from URI: {} to local file: {}", payload._uri, inputFile.getAbsolutePath());
       } else {
-        FileIngestionUtils.copyMultipartToLocal(payload._multiPart, inputFile);
+        copyMultipartToLocal(payload._multiPart, inputFile);
         LOGGER.info("Copied multipart payload to local file: {}", inputDir.getAbsolutePath());
       }
 
@@ -116,6 +125,33 @@ public class FileIngestionHelper {
       throw e;
     } finally {
       FileUtils.deleteQuietly(workingDir);
+    }
+  }
+
+  /**
+   * Copy the file from given URI to local file
+   */
+  public static void copyURIToLocal(BatchConfig batchConfig, URI sourceFileURI, File destFile)
+      throws Exception {
+    String sourceFileURIScheme = sourceFileURI.getScheme();
+    if (!PinotFSFactory.isSchemeSupported(sourceFileURIScheme)) {
+      PinotFSFactory.register(sourceFileURIScheme, batchConfig.getInputFsClassName(),
+          IngestionConfigUtils.getInputFsProps(batchConfig.getInputFsProps()));
+    }
+    PinotFSFactory.create(sourceFileURIScheme).copyToLocalFile(sourceFileURI, destFile);
+  }
+
+  /**
+   * Copy the file from the uploaded multipart to a local file
+   */
+  public static void copyMultipartToLocal(FormDataMultiPart multiPart, File destFile)
+      throws IOException {
+    FormDataBodyPart formDataBodyPart = multiPart.getFields().values().iterator().next().get(0);
+    try (InputStream inputStream = formDataBodyPart.getValueAs(InputStream.class);
+        OutputStream outputStream = new FileOutputStream(destFile)) {
+      IOUtils.copyLarge(inputStream, outputStream);
+    } finally {
+      multiPart.cleanup();
     }
   }
 

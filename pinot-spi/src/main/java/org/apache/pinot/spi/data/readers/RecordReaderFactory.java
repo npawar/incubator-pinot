@@ -54,6 +54,8 @@ public class RecordReaderFactory {
       "org.apache.pinot.plugin.inputformat.orc.ORCRecordReader";
   private static final String DEFAULT_PARQUET_RECORD_READER_CLASS =
       "org.apache.pinot.plugin.inputformat.parquet.ParquetRecordReader";
+  private static final String DEFAULT_GENERIC_ROW_RECORD_READER_CLASS =
+      "org.apache.pinot.plugin.inputformat.genericrow.GenericRowRecordReader";
 
   public static void register(String fileFormat, String recordReaderClassName, String recordReaderConfigClassName) {
     DEFAULT_RECORD_READER_CLASS_MAP.put(fileFormat.toUpperCase(), recordReaderClassName);
@@ -72,6 +74,7 @@ public class RecordReaderFactory {
     register(FileFormat.THRIFT, DEFAULT_THRIFT_RECORD_READER_CLASS, DEFAULT_THRIFT_RECORD_READER_CONFIG_CLASS);
     register(FileFormat.ORC, DEFAULT_ORC_RECORD_READER_CLASS, null);
     register(FileFormat.PARQUET, DEFAULT_PARQUET_RECORD_READER_CLASS, null);
+    register(FileFormat.GENERIC_ROW, DEFAULT_GENERIC_ROW_RECORD_READER_CLASS, null);
   }
 
   /**

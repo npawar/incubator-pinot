@@ -61,7 +61,7 @@ public class FileBasedSegmentWriter implements SegmentWriter {
 
   private File _stagingDir;
   private File _bufferFile;
-  ObjectOutputStream _genericRowOutputStream;
+  private ObjectOutputStream _genericRowOutputStream;
 
   @Override
   public void init(PinotConfiguration conf)
@@ -72,18 +72,18 @@ public class FileBasedSegmentWriter implements SegmentWriter {
     _controllerHost = controllerURI.getHost();
     _controllerPort = controllerURI.getPort();
 
-    String tableName = conf.getProperty(SegmentWriterConstants.TABLE_NAME_WITH_TYPE_PROP);
-    Preconditions.checkState(StringUtils.isNotBlank(tableName));
-    String tableConfigURI = SegmentGenerationUtils.generateTableConfigURI(controllerURIStr, tableName);
+    String tableNameWithType = conf.getProperty(SegmentWriterConstants.TABLE_NAME_WITH_TYPE_PROP);
+    Preconditions.checkState(StringUtils.isNotBlank(tableNameWithType));
+    String tableConfigURI = SegmentGenerationUtils.generateTableConfigURI(controllerURIStr, tableNameWithType);
     _tableConfig = SegmentGenerationUtils.getTableConfig(tableConfigURI);
     _tableNameWithType = _tableConfig.getTableName();
 
-    String schemaURI = SegmentGenerationUtils.generateSchemaURI(controllerURIStr, tableName);
+    String schemaURI = SegmentGenerationUtils.generateSchemaURI(controllerURIStr, tableNameWithType);
     _schema = SegmentGenerationUtils.getSchema(schemaURI);
 
     // create tmp dir
     _stagingDir = new File(FileUtils.getTempDirectory(),
-        String.format("segment_writer_staging_%s_%d", tableName, System.currentTimeMillis()));
+        String.format("segment_writer_staging_%s_%d", tableNameWithType, System.currentTimeMillis()));
     Preconditions.checkState(_stagingDir.mkdirs(), "Failed to create staging dir: %s", _stagingDir.getAbsolutePath());
 
     // create buffer file

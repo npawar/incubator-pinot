@@ -263,6 +263,10 @@ public class ControllerRequestURLBuilder {
     return StringUtil.join("/", _baseUrl, "segments", tableName + "?type=" + tableType);
   }
 
+  public String forSegmentMetadata(String tableName, String segmentName) {
+    return StringUtil.join("/", _baseUrl, "segments", tableName, segmentName, "metadata");
+  }
+
   public String forSegmentListAPI(String tableName) {
     return StringUtil.join("/", _baseUrl, "segments", tableName);
   }

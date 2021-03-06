@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.pinot.plugin.inputformat.genericrow.GenericRowRecordReader;
 import org.apache.pinot.plugin.segmentwriter.common.SegmentWriterConstants;
 import org.apache.pinot.spi.data.readers.GenericRow;
 import org.apache.pinot.spi.env.PinotConfiguration;
@@ -46,6 +45,9 @@ public class SegmentWriterTester {
 
     GenericRow row1 = getGenericRow("foo");
     GenericRow row2 = getGenericRow("foobar");
+    writer.collect(row1);
+    writer.collect(row2);
+    writer.flush();
     writer.collect(row1);
     writer.collect(row2);
     writer.flush();

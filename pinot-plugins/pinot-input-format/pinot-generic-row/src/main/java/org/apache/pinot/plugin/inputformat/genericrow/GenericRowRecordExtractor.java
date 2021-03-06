@@ -19,6 +19,8 @@
 package org.apache.pinot.plugin.inputformat.genericrow;
 
 import com.google.common.collect.ImmutableSet;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 import javax.annotation.Nullable;
@@ -45,13 +47,54 @@ public class GenericRowRecordExtractor extends BaseRecordExtractor<GenericRow> {
 
   @Override
   public GenericRow extract(GenericRow from, GenericRow to) {
+    Set<String> fieldNames;
     if (_fields.isEmpty()) {
-     to.init(from);
+      fieldNames = from.getFieldToValueMap().keySet();
     } else {
-      for (String fieldName : _fields) {
-        to.putValue(fieldName, from.getValue(fieldName));
+      fieldNames = _fields;
+    }
+
+    for (String fieldName : fieldNames) {
+      Object value = from.getValue(fieldName);
+      if (value != null) {
+        value = convert(value);
       }
+      to.putValue(fieldName, value);
     }
     return to;
+  }
+
+  @Override
+  public boolean isMultiValue(Object value) {
+    return super.isMultiValue(value) || value instanceof Object[];
+  }
+
+  @Nullable
+  @Override
+  protected Object convertMultiValue(Object value) {
+    if (value instanceof Collection) {
+      return super.convertMultiValue(value);
+    }
+    Object[] collection = (Object[]) value;
+    int numValues = collection.length;
+    Object[] array = new Object[numValues];
+    int index = 0;
+    for (Object element : collection) {
+      Object convertedValue = null;
+      if (element != null) {
+        convertedValue = convert(element);
+      }
+      if (convertedValue != null && !convertedValue.toString().equals("")) {
+        array[index++] = convertedValue;
+      }
+    }
+
+    if (index == numValues) {
+      return array;
+    } else if (index == 0) {
+      return null;
+    } else {
+      return Arrays.copyOf(array, index);
+    }
   }
 }

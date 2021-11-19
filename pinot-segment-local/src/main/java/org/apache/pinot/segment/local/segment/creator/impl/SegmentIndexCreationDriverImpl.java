@@ -267,8 +267,7 @@ public class SegmentIndexCreationDriverImpl implements SegmentIndexCreationDrive
         _segmentName = _config.getSegmentNameGenerator()
             .generateSegmentName(sequenceId, timeColumnStatistics.getMinValue(), timeColumnStatistics.getMaxValue());
       } else {
-        // When totalDoc is 0, check whether 'failOnEmptySegment' option is true. If so, directly fail the segment
-        // creation.
+        
         Preconditions.checkArgument(!_config.isFailOnEmptySegment(),
             "Failing the empty segment creation as the option 'failOnEmptySegment' is set to: " + _config
                 .isFailOnEmptySegment());

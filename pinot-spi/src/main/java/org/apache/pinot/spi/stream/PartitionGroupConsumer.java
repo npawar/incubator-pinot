@@ -27,6 +27,10 @@ import java.util.concurrent.TimeoutException;
  */
 public interface PartitionGroupConsumer extends Closeable {
 
+  default void start(StreamPartitionMsgOffset startOffset) {
+
+  }
+
   /**
    * Fetch messages and offsets from the stream partition group
    *
@@ -39,4 +43,12 @@ public interface PartitionGroupConsumer extends Closeable {
    */
   MessageBatch fetchMessages(StreamPartitionMsgOffset startOffset, StreamPartitionMsgOffset endOffset, int timeoutMs)
       throws TimeoutException;
+
+  default StreamPartitionMsgOffset commit(StreamPartitionMsgOffset lastOffset) {
+    return lastOffset;
+  }
+
+  default void rollback() {
+
+  }
 }

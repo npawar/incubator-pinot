@@ -648,6 +648,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
                 _realtimeTableDataManager.addSegmentError(_segmentNameStr,
                     new SegmentErrorInfo(System.currentTimeMillis(), "Could not build segment", null));
               } else {
+                _partitionGroupConsumer.commit(_currentOffset);
                 success = commitSegment(response.getControllerVipUrl(),
                     response.isSplitCommit() && _indexLoadingConfig.isEnableSplitCommit());
                 if (success) {

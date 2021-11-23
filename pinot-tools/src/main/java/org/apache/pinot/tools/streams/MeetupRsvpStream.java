@@ -63,6 +63,11 @@ public class MeetupRsvpStream {
     _producer = StreamDataProvider.getStreamDataProducer(KafkaStarterUtils.KAFKA_PRODUCER_CLASS_NAME, properties);
   }
 
+  public MeetupRsvpStream(boolean partitionByKey, StreamDataProducer producer) {
+    _partitionByKey = partitionByKey;
+    _producer = producer;
+  }
+
   public void run()
       throws Exception {
     _client = ClientManager.createClient();

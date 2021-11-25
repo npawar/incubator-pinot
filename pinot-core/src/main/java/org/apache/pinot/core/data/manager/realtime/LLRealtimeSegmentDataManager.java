@@ -640,6 +640,7 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
               break;
             case COMMIT:
               _state = State.COMMITTING;
+              _currentOffset = _partitionGroupConsumer.commit(_currentOffset);
               long buildTimeSeconds = response.getBuildTimeSeconds();
               buildSegmentForCommit(buildTimeSeconds * 1000L);
               if (_segmentBuildDescriptor == null) {
@@ -648,7 +649,6 @@ public class LLRealtimeSegmentDataManager extends RealtimeSegmentDataManager {
                 _realtimeTableDataManager.addSegmentError(_segmentNameStr,
                     new SegmentErrorInfo(System.currentTimeMillis(), "Could not build segment", null));
               } else {
-                _partitionGroupConsumer.commit(_currentOffset);
                 success = commitSegment(response.getControllerVipUrl(),
                     response.isSplitCommit() && _indexLoadingConfig.isEnableSplitCommit());
                 if (success) {

@@ -43,6 +43,7 @@ public class MeetupRsvpStream {
 
   protected final boolean _partitionByKey;
   protected final StreamDataProducer _producer;
+  private int count = 1;
 
   protected ClientManager _client;
   protected volatile boolean _keepPublishing;
@@ -119,6 +120,8 @@ public class MeetupRsvpStream {
 
         extractedJson.set("mtime", messageJson.get("mtime"));
         extractedJson.put("rsvp_count", 1);
+        System.out.println(count);
+        extractedJson.put("row_id", count++);
 
         if (_keepPublishing) {
           if (_partitionByKey) {

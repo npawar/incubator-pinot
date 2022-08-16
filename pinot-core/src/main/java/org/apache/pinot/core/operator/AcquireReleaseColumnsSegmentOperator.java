@@ -26,6 +26,8 @@ import org.apache.pinot.core.plan.PlanNode;
 import org.apache.pinot.segment.spi.FetchContext;
 import org.apache.pinot.segment.spi.IndexSegment;
 import org.apache.pinot.spi.exception.EarlyTerminationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -41,6 +43,7 @@ import org.apache.pinot.spi.exception.EarlyTerminationException;
 @SuppressWarnings("unchecked")
 public class AcquireReleaseColumnsSegmentOperator extends BaseOperator<IntermediateResultsBlock> {
   private static final String EXPLAIN_NAME = "ACQUIRE_RELEASE_COLUMNS_SEGMENT";
+  private static final Logger LOGGER = LoggerFactory.getLogger(AcquireReleaseColumnsSegmentOperator.class);
 
   private final PlanNode _planNode;
   private final IndexSegment _indexSegment;
@@ -71,6 +74,8 @@ public class AcquireReleaseColumnsSegmentOperator extends BaseOperator<Intermedi
     if (Thread.interrupted()) {
       throw new EarlyTerminationException();
     }
+    LOGGER.info("{} Acquire uuid: {}", Thread.currentThread().getName(), _fetchContext.getFetchId());
+    //System.out.println(Thread.currentThread().getName() + " Acquire " + _fetchContext.getFetchId());
     _indexSegment.acquire(_fetchContext);
   }
 
@@ -79,6 +84,8 @@ public class AcquireReleaseColumnsSegmentOperator extends BaseOperator<Intermedi
    */
   public void release() {
     _indexSegment.release(_fetchContext);
+    //System.out.println(Thread.currentThread().getName() + " Released " + _fetchContext.getFetchId());
+    LOGGER.info("{} Released uuid: {}", Thread.currentThread().getName(), _fetchContext.getFetchId());
   }
 
 

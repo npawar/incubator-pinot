@@ -528,7 +528,7 @@ public class QueryRunner extends AbstractBaseCommand implements Command {
     executorService.shutdown();
 
     final long startTimeAbsolute = System.currentTimeMillis();
-    final int queryIntervalNanos = (int) (1E9 / startQPS);
+    final long queryIntervalNanos = (long) (1E9 / startQPS);
     long startTime = System.currentTimeMillis();
     long reportStartTime = startTime;
     int numReportIntervals = 0;
@@ -562,10 +562,12 @@ public class QueryRunner extends AbstractBaseCommand implements Command {
         if (currentTime - reportStartTime >= reportIntervalMs) {
           long timePassed = currentTime - startTime;
           int numQueriesExecutedInt = numQueriesExecuted.get();
-          LOGGER.info("Target QPS: {}, Time Passed: {}ms, Queries Executed: {}, Exceptions: {}, Average QPS: {}, "
-                  + "Average Broker Time: {}ms, Average Client Time: {}ms, Queries Queued: {}.", startQPS, timePassed,
-              numQueriesExecutedInt, numExceptions.get(),
+          LOGGER.info(
+              "Target QPS: {}, Time Passed: {}ms, Queries Executed: {}, Exceptions: {}, Average QPS: {}, Average QPM:"
+                  + " {}, Average Broker Time: {}ms, Average Client Time: {}ms, Queries Queued: {}.",
+              startQPS, timePassed, numQueriesExecutedInt, numExceptions.get(),
               numQueriesExecutedInt / ((double) timePassed / MILLIS_PER_SECOND),
+              numQueriesExecutedInt / ((double) timePassed / (60 * MILLIS_PER_SECOND)),
               totalBrokerTime.get() / (double) numQueriesExecutedInt,
               totalClientTime.get() / (double) numQueriesExecutedInt, queryQueue.size());
           reportStartTime = currentTime;

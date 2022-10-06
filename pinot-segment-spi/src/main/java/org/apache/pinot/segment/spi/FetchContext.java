@@ -33,6 +33,9 @@ public class FetchContext {
   private final UUID _fetchId;
   private final String _segmentName;
   private final Map<String, List<ColumnIndexType>> _columnToIndexList;
+  private final Set<String> _inFilterColumns;
+  private final Set<String> _postFilterColumns;
+  private final Map<String, String> _queryOptions;
 
   /**
    * Create a new FetchRequest for this segment, to fetch all buffers of the given columns
@@ -40,13 +43,17 @@ public class FetchContext {
    * @param segmentName segment name
    * @param columns set of columns to fetch
    */
-  public FetchContext(UUID fetchId, String segmentName, Set<String> columns) {
+  public FetchContext(UUID fetchId, String segmentName, Set<String> columns, Set<String> inFilterColumns,
+      Set<String> postFilterColumns, Map<String, String> queryOptions) {
     _fetchId = fetchId;
     _segmentName = segmentName;
     _columnToIndexList = new HashMap<>();
     for (String column : columns) {
       _columnToIndexList.put(column, null);
     }
+    _inFilterColumns = inFilterColumns;
+    _postFilterColumns = postFilterColumns;
+    _queryOptions = queryOptions;
   }
 
   /**
@@ -55,10 +62,14 @@ public class FetchContext {
    * @param segmentName segment name
    * @param columnToIndexList map of column names as key, and list of indexes to fetch as values
    */
-  public FetchContext(UUID fetchId, String segmentName, Map<String, List<ColumnIndexType>> columnToIndexList) {
+  public FetchContext(UUID fetchId, String segmentName, Map<String, List<ColumnIndexType>> columnToIndexList,
+      Set<String> inFilterColumns, Set<String> postFilterColumns, Map<String, String> queryOptions) {
     _fetchId = fetchId;
     _segmentName = segmentName;
     _columnToIndexList = columnToIndexList;
+    _inFilterColumns = inFilterColumns;
+    _postFilterColumns = postFilterColumns;
+    _queryOptions = queryOptions;
   }
 
   /**
@@ -82,5 +93,17 @@ public class FetchContext {
    */
   public Map<String, List<ColumnIndexType>> getColumnToIndexList() {
     return _columnToIndexList;
+  }
+
+  public Set<String> getInFilterColumns() {
+    return _inFilterColumns;
+  }
+
+  public Set<String> getPostFilterColumns() {
+    return _postFilterColumns;
+  }
+
+  public Map<String, String> getQueryOptions() {
+    return _queryOptions;
   }
 }

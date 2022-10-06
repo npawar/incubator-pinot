@@ -125,8 +125,8 @@ public class ColumnValueSegmentPruner implements SegmentPruner {
           }
           dataSourceCaches[i] = dataSourceCache;
           if (!columnToIndexList.isEmpty()) {
-            FetchContext fetchContext =
-                new FetchContext(UUID.randomUUID(), segment.getSegmentName(), columnToIndexList);
+            FetchContext fetchContext = new FetchContext(UUID.randomUUID(), segment.getSegmentName(), columnToIndexList,
+                columnToIndexList.keySet(), Collections.emptySet(), query.getQueryOptions());
             segment.prefetch(fetchContext);
             fetchContexts[i] = fetchContext;
           }

@@ -23,6 +23,7 @@ import com.google.common.base.Preconditions;
 import io.grpc.stub.StreamObserver;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,6 +49,7 @@ import org.apache.pinot.core.plan.PlanNode;
 import org.apache.pinot.core.plan.SelectionPlanNode;
 import org.apache.pinot.core.plan.StreamingInstanceResponsePlanNode;
 import org.apache.pinot.core.plan.StreamingSelectionPlanNode;
+import org.apache.pinot.core.query.aggregation.function.AggregationFunction;
 import org.apache.pinot.core.query.config.QueryExecutorConfig;
 import org.apache.pinot.core.query.request.context.QueryContext;
 import org.apache.pinot.core.query.request.context.utils.QueryContextUtils;
@@ -168,7 +170,8 @@ public class InstancePlanMakerImplV2 implements PlanMaker {
         } else {
           columns = queryContext.getColumns();
         }
-        FetchContext fetchContext = new FetchContext(UUID.randomUUID(), indexSegment.getSegmentName(), columns);
+        FetchContext fetchContext = new FetchContext(UUID.randomUUID(), indexSegment.getSegmentName(), columns,
+            getInFilterColumns(queryContext), getPostFilterColumns(queryContext), queryContext.getQueryOptions());
         fetchContexts.add(fetchContext);
         planNodes.add(
             new AcquireReleaseColumnsSegmentPlanNode(makeSegmentPlanNode(indexSegment, queryContext), indexSegment,
@@ -184,6 +187,55 @@ public class InstancePlanMakerImplV2 implements PlanMaker {
     CombinePlanNode combinePlanNode = new CombinePlanNode(planNodes, queryContext, executorService, null);
     return new GlobalPlanImplV0(
         new InstanceResponsePlanNode(combinePlanNode, indexSegments, fetchContexts, queryContext));
+  }
+
+  /**
+   * Fixme: is this good enough?
+   */
+  private Set<String> getInFilterColumns(QueryContext queryContext) {
+    if (queryContext.getFilter() != null) {
+      Set<String> columns = new HashSet<>();
+      queryContext.getFilter().getColumns(columns);
+      return columns;
+    }
+    return Collections.emptySet();
+  }
+
+  /**
+   * Fixme: is this the right way?
+   */
+  private Set<String> getPostFilterColumns(QueryContext queryContext) {
+    Set<String> columns = new HashSet<>();
+
+    for (ExpressionContext expression : queryContext.getSelectExpressions()) {
+      expression.getColumns(columns);
+    }
+
+    // no filter
+
+    if (queryContext.getGroupByExpressions() != null) {
+      for (ExpressionContext expression : queryContext.getGroupByExpressions()) {
+        expression.getColumns(columns);
+      }
+    }
+    if (queryContext.getHavingFilter() != null) {
+      queryContext.getHavingFilter().getColumns(columns);
+    }
+    if (queryContext.getOrderByExpressions() != null) {
+      for (OrderByExpressionContext orderByExpression : queryContext.getOrderByExpressions()) {
+        orderByExpression.getColumns(columns);
+      }
+    }
+
+    if (queryContext.getAggregationFunctions() != null) {
+      for (AggregationFunction aggregationFunction : queryContext.getAggregationFunctions()) {
+        List<ExpressionContext> inputExpressions = aggregationFunction.getInputExpressions();
+        for (ExpressionContext expression : inputExpressions) {
+          expression.getColumns(columns);
+        }
+      }
+    }
+    return columns;
   }
 
   private void applyQueryOptions(QueryContext queryContext) {

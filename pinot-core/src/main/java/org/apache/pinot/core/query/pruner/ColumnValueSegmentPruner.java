@@ -18,6 +18,7 @@
  */
 package org.apache.pinot.core.query.pruner;
 
+import com.google.common.collect.Sets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -36,6 +37,7 @@ import org.apache.pinot.common.request.context.predicate.Predicate;
 import org.apache.pinot.common.request.context.predicate.RangePredicate;
 import org.apache.pinot.core.query.request.context.QueryContext;
 import org.apache.pinot.segment.local.segment.index.readers.bloom.GuavaBloomFilterReaderUtils;
+import org.apache.pinot.segment.spi.FetchColumnContext;
 import org.apache.pinot.segment.spi.FetchContext;
 import org.apache.pinot.segment.spi.ImmutableSegment;
 import org.apache.pinot.segment.spi.IndexSegment;
@@ -115,18 +117,20 @@ public class ColumnValueSegmentPruner implements SegmentPruner {
         for (int i = 0; i < numSegments; i++) {
           IndexSegment segment = segments.get(i);
           Map<String, DataSource> dataSourceCache = new HashMap<>();
-          Map<String, List<ColumnIndexType>> columnToIndexList = new HashMap<>();
+          Map<String, FetchColumnContext> fetchColumnContextMap = new HashMap<>();
           for (String column : eqInColumns) {
             DataSource dataSource = segment.getDataSource(column);
             dataSourceCache.put(column, dataSource);
             if (dataSource.getBloomFilter() != null) {
-              columnToIndexList.put(column, Collections.singletonList(ColumnIndexType.BLOOM_FILTER));
+              Set<ColumnIndexType> columnIndexTypes = Sets.newHashSet(ColumnIndexType.BLOOM_FILTER);
+              fetchColumnContextMap.put(column, new FetchColumnContext(false, columnIndexTypes, columnIndexTypes));
             }
           }
           dataSourceCaches[i] = dataSourceCache;
-          if (!columnToIndexList.isEmpty()) {
+          if (!fetchColumnContextMap.isEmpty()) {
             FetchContext fetchContext =
-                new FetchContext(UUID.randomUUID(), segment.getSegmentName(), columnToIndexList);
+                new FetchContext(UUID.randomUUID(), segment.getSegmentName(), fetchColumnContextMap,
+                    query.getQueryOptions());
             segment.prefetch(fetchContext);
             fetchContexts[i] = fetchContext;
           }

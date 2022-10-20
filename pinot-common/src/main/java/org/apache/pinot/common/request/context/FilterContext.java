@@ -18,7 +18,9 @@
  */
 package org.apache.pinot.common.request.context;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.apache.pinot.common.request.context.predicate.Predicate;
@@ -69,6 +71,23 @@ public class FilterContext {
       }
     } else {
       _predicate.getLhs().getColumns(columns);
+    }
+  }
+
+  /**
+   * Adds the columns (IDENTIFIER expressions) and their predicates from the filter to the given set.
+   */
+  public void getColumnPredicatesMap(Map<String, Set<Predicate>> columnPredicateMap) {
+    if (_children != null) {
+      for (FilterContext child : _children) {
+        child.getColumnPredicatesMap(columnPredicateMap);
+      }
+    } else {
+      Set<String> columns = new HashSet<>();
+      _predicate.getLhs().getColumns(columns);
+      for (String column : columns) {
+        columnPredicateMap.computeIfAbsent(column, c -> new HashSet<>()).add(_predicate);
+      }
     }
   }
 

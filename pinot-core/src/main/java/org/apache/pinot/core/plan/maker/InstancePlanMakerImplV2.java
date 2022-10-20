@@ -23,6 +23,8 @@ import com.google.common.base.Preconditions;
 import io.grpc.stub.StreamObserver;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,13 +50,17 @@ import org.apache.pinot.core.plan.PlanNode;
 import org.apache.pinot.core.plan.SelectionPlanNode;
 import org.apache.pinot.core.plan.StreamingInstanceResponsePlanNode;
 import org.apache.pinot.core.plan.StreamingSelectionPlanNode;
+import org.apache.pinot.core.query.aggregation.function.AggregationFunction;
 import org.apache.pinot.core.query.config.QueryExecutorConfig;
 import org.apache.pinot.core.query.request.context.QueryContext;
 import org.apache.pinot.core.query.request.context.utils.QueryContextUtils;
 import org.apache.pinot.core.util.GroupByUtils;
 import org.apache.pinot.core.util.QueryOptionsUtils;
+import org.apache.pinot.segment.spi.FetchColumnContext;
 import org.apache.pinot.segment.spi.FetchContext;
 import org.apache.pinot.segment.spi.IndexSegment;
+import org.apache.pinot.segment.spi.datasource.DataSource;
+import org.apache.pinot.segment.spi.store.ColumnIndexType;
 import org.apache.pinot.spi.env.PinotConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -160,15 +166,8 @@ public class InstancePlanMakerImplV2 implements PlanMaker {
 
     if (queryContext.isEnablePrefetch()) {
       fetchContexts = new ArrayList<>(numSegments);
-      List<ExpressionContext> selectExpressions = queryContext.getSelectExpressions();
       for (IndexSegment indexSegment : indexSegments) {
-        Set<String> columns;
-        if (selectExpressions.size() == 1 && "*".equals(selectExpressions.get(0).getIdentifier())) {
-          columns = indexSegment.getPhysicalColumnNames();
-        } else {
-          columns = queryContext.getColumns();
-        }
-        FetchContext fetchContext = new FetchContext(UUID.randomUUID(), indexSegment.getSegmentName(), columns);
+        FetchContext fetchContext = makeFetchContext(indexSegment, queryContext);
         fetchContexts.add(fetchContext);
         planNodes.add(
             new AcquireReleaseColumnsSegmentPlanNode(makeSegmentPlanNode(indexSegment, queryContext), indexSegment,
@@ -184,6 +183,131 @@ public class InstancePlanMakerImplV2 implements PlanMaker {
     CombinePlanNode combinePlanNode = new CombinePlanNode(planNodes, queryContext, executorService, null);
     return new GlobalPlanImplV0(
         new InstanceResponsePlanNode(combinePlanNode, indexSegments, fetchContexts, queryContext));
+  }
+
+  /**
+   * Decide which columns to fetch.
+   * Decide which of the ColumnIndexTypes to mark for prefetch
+   */
+  private FetchContext makeFetchContext(IndexSegment indexSegment, QueryContext queryContext) {
+    Map<String, Set<Predicate>> inFilterColumnToPredicates = getInFilterColumnToPredicates(queryContext);
+    Set<String> postFilterColumns = getPostFilterColumns(queryContext);
+
+    Map<String, Set<ColumnIndexType>> prefetch = new HashMap<>();
+
+    // For all post filter columns, if column has dictionary, put in prefetch list
+    for (String column : postFilterColumns) {
+      if (indexSegment.getDataSource(column).getDictionary() != null) {
+        prefetch.computeIfAbsent(column, c -> new HashSet<>()).add(ColumnIndexType.DICTIONARY);
+      }
+    }
+    // For all in filter columns, if no suitable index found for any predicate, put fwd index in prefetch
+    for (Map.Entry<String, Set<Predicate>> entry : inFilterColumnToPredicates.entrySet()) {
+      String column = entry.getKey();
+      Set<Predicate> predicates = entry.getValue();
+      DataSource dataSource = indexSegment.getDataSource(column);
+      boolean canUseIndex = true;
+      for (Predicate predicate : predicates) {
+
+        if (predicate.getLhs().getType() == ExpressionContext.Type.FUNCTION) {
+          canUseIndex = false;
+        } else {
+          switch (predicate.getType()) {
+            case JSON_MATCH:
+              if (dataSource.getJsonIndex() == null) {
+                canUseIndex = false;
+              }
+              break;
+            case RANGE:
+              if ((dataSource.getRangeIndex() == null) && (!dataSource.getDataSourceMetadata().isSorted()
+                  || dataSource.getDictionary() == null)) {
+                canUseIndex = false;
+              }
+              break;
+            case EQ:
+            case IN:
+              if (dataSource.getInvertedIndex() == null && (!dataSource.getDataSourceMetadata().isSorted()
+                  || dataSource.getDictionary() == null)) {
+                canUseIndex = false;
+              }
+              break;
+            default:
+              canUseIndex = false;
+          }
+        }
+        // If for any predicate, an index cannot be used, break out for that column
+        if (!canUseIndex) {
+          break;
+        }
+      }
+
+      if (!canUseIndex) {
+        prefetch.computeIfAbsent(column, c -> new HashSet<>()).add(ColumnIndexType.FORWARD_INDEX);
+      }
+    }
+
+    Set<String> columns;
+    List<ExpressionContext> selectExpressions = queryContext.getSelectExpressions();
+    if (selectExpressions.size() == 1 && "*".equals(selectExpressions.get(0).getIdentifier())) {
+      columns = indexSegment.getPhysicalColumnNames();
+    } else {
+      columns = queryContext.getColumns();
+    }
+    Map<String, FetchColumnContext> fetchColumnContextMap = new HashMap<>();
+    for (String column : columns) {
+      fetchColumnContextMap.put(column,
+          new FetchColumnContext(true, Collections.emptySet(), prefetch.getOrDefault(column, Collections.emptySet())));
+    }
+    return new FetchContext(UUID.randomUUID(), indexSegment.getSegmentName(), fetchColumnContextMap,
+        queryContext.getQueryOptions());
+  }
+
+  /**
+   * Returns a map of every column in the filters, along with a list of all the predicates for that column
+   */
+  private Map<String, Set<Predicate>> getInFilterColumnToPredicates(QueryContext queryContext) {
+    if (queryContext.getFilter() != null) {
+      Map<String, Set<Predicate>> columnPredicatesMap = new HashMap<>();
+      queryContext.getFilter().getColumnPredicatesMap(columnPredicatesMap);
+      return columnPredicatesMap;
+    }
+    return Collections.emptyMap();
+  }
+
+  /**
+   * Returns the post-filter columns
+   */
+  private Set<String> getPostFilterColumns(QueryContext queryContext) {
+    Set<String> columns = new HashSet<>();
+
+    for (ExpressionContext expression : queryContext.getSelectExpressions()) {
+      expression.getColumns(columns);
+    }
+
+    // no filter
+    if (queryContext.getGroupByExpressions() != null) {
+      for (ExpressionContext expression : queryContext.getGroupByExpressions()) {
+        expression.getColumns(columns);
+      }
+    }
+    if (queryContext.getHavingFilter() != null) {
+      queryContext.getHavingFilter().getColumns(columns);
+    }
+    if (queryContext.getOrderByExpressions() != null) {
+      for (OrderByExpressionContext orderByExpression : queryContext.getOrderByExpressions()) {
+        orderByExpression.getColumns(columns);
+      }
+    }
+
+    if (queryContext.getAggregationFunctions() != null) {
+      for (AggregationFunction aggregationFunction : queryContext.getAggregationFunctions()) {
+        List<ExpressionContext> inputExpressions = aggregationFunction.getInputExpressions();
+        for (ExpressionContext expression : inputExpressions) {
+          expression.getColumns(columns);
+        }
+      }
+    }
+    return columns;
   }
 
   private void applyQueryOptions(QueryContext queryContext) {
